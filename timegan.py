@@ -10,6 +10,9 @@ from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 ### transformer imports
 from transformer import *
