@@ -171,7 +171,22 @@ class TransformerForPrediction(Module):
         
         
     
+class TransformerForBinaryClassification(Module):
     
+    def __init__(self,encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
+        
+        self.encoder = encoder
+        self.dropout = Dropout(dropout_prob)
+        self.l1 = Linear(encoder.hidden_dim,encoder.hidden_dim)
+        self.out = Linear(encoder.hidden_dim,1)
+        
+    def forward(self, x):
+        x = self.encoder(x)
+        x = torch.mean(x, dim=1)
+        x = self.l1(x)
+        x = GELU(x)
+        return self.out(x)
+        
     
     
     
