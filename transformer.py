@@ -12,7 +12,6 @@ def do_attention(query,key,value):
 
 
 
-
 class AttentionHead(Module):
     
     def __init__(self, embed_dim, head_dim):
@@ -27,7 +26,6 @@ class AttentionHead(Module):
         v = self.Wv(h)
         outputs = do_attention(q,k,h)
         return outputs
-        
         
         
         
@@ -48,6 +46,7 @@ class MultiHeadAttention(Module):
     def forward(self, h):
         x = torch.cat([head(h) for head in self.heads], dim = -1)
         return self.output(x) 
+
 
 
 class Sine(Module):
@@ -130,11 +129,13 @@ class TransformerEncoderLayer(Module):
 
     
     
-    
 class TransformerEncoder(Module):
     
-    def __init__(self, num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len) -> None:
+    def __init__(self, num_hidden, hidden_size, intermediate_size, 
+                         num_heads, dropout_prob, seq_len) -> None:
+        
         super().__init__()
+        self.hidden_dim = hidden_size
         self.time_embedding = Time2Vec(seq_len)
         self.layers = ModuleList([TransformerEncoderLayer(hidden_size, intermediate_size, num_heads, dropout_prob)
                                  for _ in range(num_hidden)])
@@ -147,4 +148,33 @@ class TransformerEncoder(Module):
         for layer in self.layers:
             x = layer(x)
         return x
+    
+
+class TransformerForPrediction(Module):
+    
+    def __init__(self, encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
+        super().__init__()
+        self.encoder = encoder
+        self.dropout = Dropout(dropout_prob)
+        self.fc = Linear(encoder.hidden_dim,1)
+        
+    def forward(self, x):
+       
+        x = self.encoder(x)
+        x = self.dropout(x)
+        ## -3 because we added 2 dimensions for time at the end, assuming price isn the last element
+        ## might be worth adding this as an argument to prevent confusion
+        x = self.fc(x)[:,-3,:]
+        return x
+        
+        
+        
+    
+    
+    
+    
+    
+    
+    
+    
     

@@ -197,7 +197,10 @@ if __name__ == "__main__":
     encoder = TransformerEncoder(3,9,4,3,0.3,30)
     #input_size, hidden_size, output_size, num_layers
     decoder = FFNN(9, 6, 7, 3)
-  
+    predictor = TransformerForPrediction(encoder)
+    X_loader = DataLoader(X, 100, shuffle=True)
+    for thing in X_loader:
+        predictor(thing)
     
     model = TimeGAN(encoder, decoder, None, None, None)
     train(model, X, 10, 0.01, 128)
