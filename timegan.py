@@ -245,6 +245,24 @@ def generate_data(n_points: int, timesteps: int, model: TimeGAN) -> torch.Tensor
     latent = model.generator(Z)
     return model.decoder(latent)
 
+
+
+def visualize(generated_data, real_data, cols):
+
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(15, 10))
+    axes=axes.flatten()
+
+    time = list(range(1,30))
+    obs = np.random.randint(len(generated_data.shape))
+    for j, col in enumerate(cols):
+        frame = pd.DataFrame({'Real': real_data[obs][:, j],
+                   'Synthetic': generated_data[obs][:, j]})
+        frame.plot(ax=axes[j],
+                   title = col,
+                   secondary_y='Synthetic data', style=['-', '--'])
+    fig.tight_layout()
+
+
 if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
