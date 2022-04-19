@@ -14,7 +14,7 @@ def do_attention(query,key,value):
 
 class AttentionHead(Module):
     
-    def __init__(self, embed_dim, head_dim):
+    def __init__(self, embed_dim, head_dim) -> None:
         super().__init__()
         self.Wq = Linear(embed_dim, head_dim)
         self.Wk = Linear(embed_dim, head_dim)
@@ -24,7 +24,7 @@ class AttentionHead(Module):
         q = self.Wq(h)
         k = self.Wk(h)
         v = self.Wv(h)
-        outputs = do_attention(q,k,h)
+        outputs = do_attention(q,k,v)
         return outputs
         
         
@@ -40,8 +40,9 @@ class MultiHeadAttention(Module):
             [AttentionHead(hidden_size, head_dim) for _ in range(num_heads)]
         )
         
-        # not sure about this
-        self.output = Linear(hidden_size*num_heads, hidden_size)
+
+      #  self.output = Linear(hidden_size*num_heads, hidden_size)
+        self.output = Linear(hidden_size, hidden_size)
         
     def forward(self, h):
         x = torch.cat([head(h) for head in self.heads], dim = -1)
