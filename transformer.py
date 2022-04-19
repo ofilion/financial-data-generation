@@ -1,11 +1,12 @@
 import torch
-from torch.nn import Module, Linear, MSELoss, ModuleList, Conv1d, Dropout, LayerNorm, parameter
+from torch.nn import Module, Linear, MSELoss, ModuleList, Conv1d, Dropout, LayerNorm, parameter, GELU
 import torch.nn.functional as F
+import math
 
 
 def do_attention(query,key,value):
     # get scaled attention scores
-    attention_scores = torch.bmm(query, key.transpose(1,2))/torch.sqrt(query.size(-1))
+    attention_scores = torch.bmm(query, key.transpose(1,2))/math.sqrt(query.size(-1))
     attention_weights = F.softmax(attention_scores,dim=1)
     return torch.bmm(attention_weights, value)    
 
@@ -25,6 +26,7 @@ class AttentionHead(Module):
         k = self.Wk(h)
         v = self.Wv(h)
         outputs = do_attention(q,k,h)
+        return outputs
         
         
         
@@ -39,46 +41,64 @@ class MultiHeadAttention(Module):
         self.heads = ModuleList(
             [AttentionHead(hidden_size, head_dim) for _ in range(num_heads)]
         )
-        self.output = Linear(hidden_size, hidden_size)
+        
+        # not sure about this
+        self.output = Linear(hidden_size*num_heads, hidden_size)
         
     def forward(self, h):
-        x = torch.cat([head(h) for head in self.heads], dim = 1)
+        x = torch.cat([head(h) for head in self.heads], dim = -1)
         return self.output(x) 
 
 
 class Sine(Module):
     
-    def __init__(self,input_size, output_size) -> None:
+    def __init__(self,input_size) -> None:
         
         super().__init__()
-        self.out = output_size
-        self.weights_linear = parameter.Parameter(torch.randn(input_size, 1))
-        self.bias_linear = parameter.Parameter(torch.randn(1))
-        self.weights_periodic = parameter.Parameter(torch.randn(in_features, output_size-1))
-        self.bias_periodic = parameter.Parameter(torch.randn(output_size-1))
+        self.weights_linear = parameter.Parameter(torch.randn(input_size))
+        self.bias_linear = parameter.Parameter(torch.randn(input_size))
+        self.weights_periodic = parameter.Parameter(torch.randn(input_size))
+        self.bias_periodic = parameter.Parameter(torch.randn(input_size))
     
     def forward(self, x):
+     #   print(x.shape, self.weights_linear.shape)
+        time_linear = x * self.weights_linear + self.bias_linear
+
+        time_linear = torch.unsqueeze(time_linear,-1)
+      
+        
+        time_periodic = torch.sin( x * self.weights_periodic + self.bias_periodic)
+        time_periodic = torch.unsqueeze(time_periodic,-1)
+        
+        return torch.cat([time_linear, time_periodic], -1)
+    
+    
+    
+class Time2Vec(Module):
+    
+    def __init__(self, seq_len) -> None:
+        super().__init__()
+        self.periodic =  Sine(seq_len)
+        
+    def forward(self, x):
         x = torch.mean(x, axis=-1)
-        time_linear = self.weights_linear * x + self.bias_linear
-        time_linear = torch.expand_dims(time_linear, axis=-1) 
-    
-        time_periodic = torch.sin(torch.multiply(x, self.weights_periodic) + self.bias_periodic)
-        time_periodic = torch.expand_dims(time_periodic, axis=-1) 
-        return torch.concat([time_linear, time_periodic], axis=-1)
-    
+        x = self.periodic(x)
+        return x
     
     
     
 class FeedForward(Module):
     
     # rule of thumb: hidden size of first layer 4x emebddding dimension
-     def __init__(self,hidden_size, intermediate_size, dropout_prob = 0.3) -> None:
+     def __init__(self,hidden_size, inter_size, dropout_prob = 0.3) -> None:
         super().__init__()
         # equivalent to dense layer or a position wise feed-forward network
-        self.conv1 = Conv1d(in_channels = hidden_size, out_channels = intermediate_size, kernel_size=1)
-        self.conv2 = Conv1d(in_channels = intermediate_size, out_channels = hidden_size, kernel_size = 1)
+       # self.conv1 = Conv1d(in_channels = seq_len, out_channels = hidden_dim, kernel_size=1)
+       # self.conv2 = Conv1d(in_channels = hidden_dim, out_channels = seq_len, kernel_size = 1)
+        self.conv1 = Linear(hidden_size, inter_size)
+        self.conv2 = Linear(inter_size, hidden_size)
         # standard to use gelu
-        self.gelu = F.GELU()
+        self.gelu = GELU()
         self.dropout = Dropout(dropout_prob)
     
      def forward(self,x):
@@ -97,7 +117,7 @@ class TransformerEncoderLayer(Module):
         self.layer_norm1 = LayerNorm(hidden_size)
         self.layer_norm2 = LayerNorm(hidden_size)
         self.attention = MultiHeadAttention(hidden_size, num_heads)
-        self.ff = FeedForward(hidden_size, intermediate_size, dropout_prob)
+        self.ff = FeedForward(hidden_size ,intermediate_size, dropout_prob)
         
     
     def forward(self, x):
@@ -108,17 +128,6 @@ class TransformerEncoderLayer(Module):
         # skip connection
         return x + self.ff(x)
 
-
-class Time2Vec(Module):
-    
-    def __init__(self, seq_len) -> None:
-        super().__init__()
-        self.periodic =  Sine(1, seq_len)
-        self.linear = Linear(seq_len,2)
-        
-    def forward(self, x):
-        x = self.periodic(x)
-        return self.linear(x)
     
     
     
@@ -133,8 +142,8 @@ class TransformerEncoder(Module):
     def forward(self, x):
         # get time embedding
         time = self.time_embedding(x)
-        # cncatenate it to input
-        x = torch.concat([x,time],axis=-1)
+        # concatenate it to input
+        x = torch.cat([x,time],axis=-1)
         for layer in self.layers:
             x = layer(x)
         return x

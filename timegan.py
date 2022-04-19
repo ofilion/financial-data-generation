@@ -9,6 +9,10 @@ from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
+
+### transformer imports
+from transformer import *
+
 class RealDataset(Dataset):
 
     def __init__(self, filepath: str, start_date, end_date, timesteps=30) -> None:
@@ -57,8 +61,9 @@ class FFNN(Module):
                                   for i in range(num_layers)])
 
     def forward(self, X):
-        for layer in self.layers[:-1]:
+        for layer in self.layers[:-1]: 
             X = layer(X)
+           
             F.leaky_relu(X)
         return self.layers[-1](X)
 
@@ -183,9 +188,16 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, batch_size: int
 if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
-    print(X[0].shape)
-    encoder = BasicGRU(7, 4, 1)
-    decoder = FFNN(4, 8, 7, 3)
+  
+  #  encoder = BasicGRU(7, 4, 1)
+  #  decoder = FFNN(4, 8, 7, 3)
+ 
+  
+ #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
+    encoder = TransformerEncoder(3,9,4,3,0.3,30)
+    #input_size, hidden_size, output_size, num_layers
+    decoder = FFNN(9, 6, 7, 3)
+  
     
     model = TimeGAN(encoder, decoder, None, None, None)
     train(model, X, 10, 0.01, 128)
