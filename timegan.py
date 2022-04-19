@@ -195,7 +195,7 @@ def train_discriminator_step(X: torch.Tensor, Z: torch.Tensor, model: TimeGAN, c
     optimizer.step()
     return total_loss.detach().item()
 
-def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, batch_size: int):
+def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, batch_size: int):
 
     X_loader = DataLoader(X_ds, batch_size, shuffle=True)
     mse_loss = MSELoss()
@@ -220,7 +220,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, batch_size: int
     print("\nJoint training")
     as_optimizer = Adam(chain(model.encoder.parameters(), model.decoder.parameters()), lr)
     gs_optimizer = Adam(chain(model.generator.parameters(), model.supervisor.parameters()), lr)
-    disc_optimizer = Adam(model.discriminator.parameters())
+    disc_optimizer = Adam(model.discriminator.parameters(), d_lr)
     for e in range(epochs):
         running_gs_loss = 0.
         running_as_loss = 0.
@@ -229,7 +229,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, batch_size: int
             Z = torch.randn_like(X)
             gs_loss = 0.
             as_loss = 0.
-            k = 2
+            k = 3
             for _ in range(k):
                 gs_loss += train_joint_generator_supervisor_step(X, Z, model, mse_loss, mse_loss, gs_optimizer)
                 as_loss += train_joint_autoencoder_supervisor_step(X, model, mse_loss, mse_loss, as_optimizer)
@@ -250,11 +250,11 @@ if __name__ == "__main__":
 
     print(X[0].shape)
   
-    encoder = BasicGRU(7, 4, 1)
-    decoder = FFNN(4, 8, 7, 3)
-    supervisor = BasicGRU(4, 4, 1)
-    generator = BasicGRU(7, 4, 1)
-    discriminator = GRUDiscriminator(4, 8, 1)
+    encoder = BasicGRU(7, 12, 3)
+    decoder = FFNN(12, 16, 7, 3)
+    supervisor = BasicGRU(12, 12, 3)
+    generator = BasicGRU(7, 12, 3)
+    discriminator = GRUDiscriminator(12, 16, 3)
   
     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
     # encoder = TransformerEncoder(3,9,4,3,0.3,30)
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     #     predictor(thing)
     
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 50, 0.01, 128)
+    train(model, X, 50, 1e-3, 1e-5, 128)
 
     generated_data = generate_data(3, 30, model)
     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
