@@ -11,7 +11,6 @@ def do_attention(query,key,value):
     return torch.bmm(attention_weights, value)    
 
 
-
 class AttentionHead(Module):
     
     def __init__(self, embed_dim, head_dim) -> None:
@@ -28,7 +27,6 @@ class AttentionHead(Module):
         return outputs
         
         
-        
 class MultiHeadAttention(Module):
     
     def __init__(self, hidden_size, num_heads) -> None:
@@ -40,14 +38,12 @@ class MultiHeadAttention(Module):
             [AttentionHead(hidden_size, head_dim) for _ in range(num_heads)]
         )
         
-
       #  self.output = Linear(hidden_size*num_heads, hidden_size)
         self.output = Linear(hidden_size, hidden_size)
         
     def forward(self, h):
         x = torch.cat([head(h) for head in self.heads], dim = -1)
         return self.output(x) 
-
 
 
 class Sine(Module):
@@ -73,7 +69,6 @@ class Sine(Module):
         return torch.cat([time_linear, time_periodic], -1)
     
     
-    
 class Time2Vec(Module):
     
     def __init__(self, seq_len) -> None:
@@ -84,7 +79,6 @@ class Time2Vec(Module):
         x = torch.mean(x, axis=-1)
         x = self.periodic(x)
         return x
-    
     
     
 class FeedForward(Module):
@@ -108,7 +102,6 @@ class FeedForward(Module):
         return self.dropout(x)
     
     
-    
 class TransformerEncoderLayer(Module):
     
     def __init__(self, hidden_size, intermediate_size, num_heads, dropout_prob) -> None:
@@ -128,7 +121,6 @@ class TransformerEncoderLayer(Module):
         # skip connection
         return x + self.ff(x)
 
-    
     
 class TransformerEncoder(Module):
     
@@ -169,8 +161,6 @@ class TransformerForPrediction(Module):
         return x
         
         
-        
-    
 class TransformerForBinaryClassification(Module):
     
     def __init__(self,encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
@@ -187,10 +177,3 @@ class TransformerForBinaryClassification(Module):
         x = GELU(x)
         return self.out(x)
         
-    
-    
-    
-    
-    
-    
-    
