@@ -189,18 +189,19 @@ if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
   
-  #  encoder = BasicGRU(7, 4, 1)
-  #  decoder = FFNN(4, 8, 7, 3)
+   # encoder = BasicGRU(7, 4, 1)
+    #decoder = FFNN(4, 8, 7, 3)
  
   
  #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
     encoder = TransformerEncoder(3,9,4,3,0.3,30)
     #input_size, hidden_size, output_size, num_layers
     decoder = FFNN(9, 6, 7, 3)
-    predictor = TransformerForPrediction(encoder)
-    X_loader = DataLoader(X, 100, shuffle=True)
-    for thing in X_loader:
-        predictor(thing)
+   
+   
+   #predictor = TransformerForPrediction(encoder)
+   
+    
     
     model = TimeGAN(encoder, decoder, None, None, None)
     train(model, X, 10, 0.01, 128)
