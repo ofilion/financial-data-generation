@@ -175,7 +175,8 @@ def train_joint_generator_supervisor_step(X: torch.Tensor, Z: torch.Tensor, mode
     supervisor_loss = sup_criterion(torch.reshape(supervisor_y_hat, (-1, supervisor_y.shape[-1])),
                                     torch.reshape(supervisor_y, (-1, supervisor_y.shape[-1])))
     
-    x_hat = model.decoder(supervised_latent_space)
+    # x_hat = model.decoder(supervised_latent_space)
+    x_hat = generated_latent_space
     # x_hat is (batch_size, timesteps, features)
     real_std, real_mean = torch.std_mean(X.view(-1, X.shape[-1]), dim=0)
     pred_std, pred_mean = torch.std_mean(x_hat.view(-1, x_hat.shape[-1]), dim=0)
