@@ -199,14 +199,20 @@ class TransformerForPrediction(Module):
         super(TransformerForPrediction, self).__init__()
         self.encoder = encoder
         self.dropout = Dropout(dropout_prob)
-        self.fc = Linear(encoder.hidden_dim,encoder.hidden_dim)
+        self.lin1 = Linear(encoder.hidden_dim, encoder.hidden_dim)
+        self.out = Linear(encoder.hidden_dim, 1)
+
         
     def forward(self, x):
-       
+        
         x = self.encoder(x)
         x = self.dropout(x)
-        x = self.fc(x)
-        return x
+        x = torch.mean(x, dim=1) 
+
+        x = self.lin1(x)
+        X = torch.relu(x)
+        return self.out(x)
+
         
         
 class TransformerForBinaryClassification(Module):
