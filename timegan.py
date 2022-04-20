@@ -16,7 +16,7 @@ import numpy as np
 EPOCHS = 50
 BATCH_SIZE = 128
 G_LR = 1e-3
-D_LR = 1e-5
+D_LR = 5e-4
 HIDDEN_SIZE = 12
 HIDDEN_SIZE_2 = 16
 GRU_LAYERS = 3
@@ -310,7 +310,7 @@ if __name__ == "__main__":
 
 
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 50, 1e-3, 5e-4, 128)
+    train(model, X, EPOCHS, G_LR, D_LR, BATCH_SIZE)
     
     
     folder_name = 'gru'
