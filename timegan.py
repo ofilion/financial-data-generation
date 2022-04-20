@@ -115,7 +115,7 @@ def train_superviser_step(X: torch.Tensor, model: TimeGAN, criterion: Callable,
     y = encoded[:, 1:, :]
 
     y_hat = model.supervisor(encoded)[:,:-1,:]
-
+   # print(y.shape, y_hat.shape )
     loss = criterion(torch.reshape(y_hat, (-1, y.shape[-1])), torch.reshape(y , (-1, y.shape[-1])))
     loss.backward()
     optimizer.step()
@@ -251,41 +251,60 @@ def visualize(generated_data, real_data, cols):
 
     fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(15, 10))
     axes=axes.flatten()
-
+   
     time = list(range(1,30))
-    obs = np.random.randint(len(generated_data.shape))
     for j, col in enumerate(cols):
-        frame = pd.DataFrame({'Real': real_data[obs][:, j],
-                   'Synthetic': generated_data[obs][:, j]})
+    
+        frame = pd.DataFrame({'Real': real_data[:, j],
+                   'Synthetic': generated_data[:, j]})
         frame.plot(ax=axes[j],
                    title = col,
                    secondary_y='Synthetic data', style=['-', '--'])
     fig.tight_layout()
 
 
+
+
 if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
     print(X[0].shape)
-  
+    
+    '''
     encoder = BasicGRU(7, 12, 3)
     decoder = FFNN(12, 16, 7, 3)
     supervisor = BasicGRU(12, 12, 3)
     generator = BasicGRU(7, 12, 3)
     discriminator = GRUDiscriminator(12, 16, 3)
+    '''
   
     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
-    # encoder = TransformerEncoder(3,9,4,3,0.3,30)
+    encoder = TransformerEncoder(4,9,6,3,30)
     #input_size, hidden_size, output_size, num_layers
-    # decoder = FFNN(9, 6, 7, 3)
-    # predictor = TransformerForPrediction(encoder)
-    # X_loader = DataLoader(X, 100, shuffle=True)
-    # for thing in X_loader:
-    #     predictor(thing)
+    decoder = FFNN(9, 14, 7, 3)
+    supervisor = TransformerEncoder(4,9,6,3,30,False)
+   # supervisor = TransformerForPrediction(supervisor_encoder)
+    generator = TransformerEncoder(4,9,6,3,30)
     
+    discriminator_encoder = TransformerEncoder(2,9,4,3,30,False)
+    discriminator = TransformerForBinaryClassification(discriminator_encoder)
+    
+
+    
+    X_loader = DataLoader(X, 1, shuffle=True)
+    example = next(iter(X_loader))
+    print("here",example[0].shape)
+
+
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 50, 1e-3, 5e-4, 128)
+    train(model, X, 100, 1e-3, 5e-4, 128)
 
     generated_data = generate_data(3, 30, model)
     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
-    print(generated_data[0])
+    print(generated_data[0].shape)
+    
+    cols = [
+    "Return","Open-Close",'Open-Low',"Open-High","Normalized Volume", "VIX", "VIX Open-close"
+]
+    visualize(generated_data[0].detach(), example[0].detach(), cols)
+    

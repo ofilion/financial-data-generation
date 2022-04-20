@@ -4,17 +4,22 @@ import torch.nn.functional as F
 import math
 
 
-def do_attention(query,key,value):
+def do_attention(query,key,value, mask= None):
     # get scaled attention scores
     attention_scores = torch.bmm(query, key.transpose(1,2))/math.sqrt(query.size(-1))
+    
+    if mask is not None:
+        attention_scores = attention_scores.masked_fill(mask==0, float(1e-10))
+    
     attention_weights = F.softmax(attention_scores,dim=1)
     return torch.bmm(attention_weights, value)    
 
 
 class AttentionHead(Module):
     
-    def __init__(self, embed_dim, head_dim) -> None:
+    def __init__(self, embed_dim, head_dim, mask=None) -> None:
         super().__init__()
+        self.mask = mask
         self.Wq = Linear(embed_dim, head_dim)
         self.Wk = Linear(embed_dim, head_dim)
         self.Wv = Linear(embed_dim, head_dim)
@@ -23,13 +28,13 @@ class AttentionHead(Module):
         q = self.Wq(h)
         k = self.Wk(h)
         v = self.Wv(h)
-        outputs = do_attention(q,k,v)
+        outputs = do_attention(q,k,v, self.mask)
         return outputs
         
         
 class MultiHeadAttention(Module):
     
-    def __init__(self, hidden_size, num_heads) -> None:
+    def __init__(self, hidden_size, num_heads, mask=None) -> None:
         super().__init__()
         num_heads = num_heads
         # by convention
@@ -100,11 +105,12 @@ class FeedForward(Module):
         x = self.gelu(x)
         x = self.conv2(x)
         return self.dropout(x)
+   
     
     
 class TransformerEncoderLayer(Module):
     
-    def __init__(self, hidden_size, intermediate_size, num_heads, dropout_prob) -> None:
+    def __init__(self, hidden_size, intermediate_size, num_heads, dropout_prob=0.3) -> None:
         super().__init__()
         # layer norm is prefered for transformer
         self.layer_norm1 = LayerNorm(hidden_size)
@@ -117,17 +123,59 @@ class TransformerEncoderLayer(Module):
         hidden = self.layer_norm1(x)
         #skip connection as in resnet
         x = x + self.attention(hidden)
-        x = self.layer_norm2(x)
         # skip connection
-        return x + self.ff(x)
+        x = x + self.ff(self.layer_norm2(x))
+        # skip connection
+        return x
+    
+    
+class TransformerDecoderLayer(Module):
+    
+    def __init__(self,hidden_size, intermediate_size, num_heads, dropout_prob=0.3) -> None:
+        super().__init__()
+        self.layer_norm1 = LayerNorm(hidden_size)
+        self.layer_norm2 = LayerNorm(hidden_size)
+        self.layer_norm3 = LayerNorm(hidden_size)
+        
+        self.dropout1 = Dropout(dropout_prob)
+        self.dropout2 = Dropout(dropout_prob)
+        self.dropout3 = Dropout(dropout_prob)
+        
+        self.attention_self = MultiHeadAttention(hidden_size, num_heads)
+        self.attention_dec = MultiHeadAttention(hidden_size, num_heads)
+        
+        self.ff = FeedForward(hidden_size ,intermediate_size, dropout_prob)
+        
+    def forward(self, dec, enc, src_mask, tgt_mask):
+        
+        
+        #layer norm with skip connection
+        x = self.attention_self(dec, tgt_mask)
+        x = self.norm1(x + dec)
+        x = self.dropout1(x)
+        
+        if enc is not None:
+            hidden = x
+            x = self.attention_dec(x, src_mask)
+            x = self.norm2(x + hidden)
+            x = self.dropout2(x)
+        
+        hidden = x
+        x = self.ff(x)
+        x = self.norm3(x + hidden)
+        x = self.dropout3(x)
+        return x
+        
+            
 
     
 class TransformerEncoder(Module):
     
     def __init__(self, num_hidden, hidden_size, intermediate_size, 
-                         num_heads, dropout_prob, seq_len) -> None:
+                         num_heads, seq_len,embed = True, dropout_prob=0.3) -> None:
         
         super().__init__()
+        self.embed = embed
         self.hidden_dim = hidden_size
         self.time_embedding = Time2Vec(seq_len)
         self.layers = ModuleList([TransformerEncoderLayer(hidden_size, intermediate_size, num_heads, dropout_prob)
@@ -135,10 +183,12 @@ class TransformerEncoder(Module):
         
     def forward(self, x):
         # get time embedding
-        time = self.time_embedding(x)
+        if self.embed:
+            time = self.time_embedding(x)
+            x = torch.cat([x,time],axis=-1)
         # concatenate it to input
-        x = torch.cat([x,time],axis=-1)
         for layer in self.layers:
+            #print(x.shape)
             x = layer(x)
         return x
     
@@ -146,34 +196,33 @@ class TransformerEncoder(Module):
 class TransformerForPrediction(Module):
     
     def __init__(self, encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
-        super().__init__()
+        super(TransformerForPrediction, self).__init__()
         self.encoder = encoder
         self.dropout = Dropout(dropout_prob)
-        self.fc = Linear(encoder.hidden_dim,1)
+        self.fc = Linear(encoder.hidden_dim,encoder.hidden_dim)
         
     def forward(self, x):
        
         x = self.encoder(x)
         x = self.dropout(x)
-        ## -3 because we added 2 dimensions for time at the end, assuming price isn the last element
-        ## might be worth adding this as an argument to prevent confusion
-        x = self.fc(x)[:,-3,:]
+        x = self.fc(x)
         return x
         
         
 class TransformerForBinaryClassification(Module):
     
     def __init__(self,encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
-        
+        super().__init__()
         self.encoder = encoder
         self.dropout = Dropout(dropout_prob)
         self.l1 = Linear(encoder.hidden_dim,encoder.hidden_dim)
+        self.gelu = GELU()
         self.out = Linear(encoder.hidden_dim,1)
         
     def forward(self, x):
         x = self.encoder(x)
         x = torch.mean(x, dim=1)
         x = self.l1(x)
-        x = GELU(x)
+        x = self.gelu(x)
         return self.out(x)
         
