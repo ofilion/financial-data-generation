@@ -2,6 +2,7 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import numpy as np
 from timegan import *
+import matplotlib.gridspec as gridspec
 
 n_components = 2
 seq_len = 30
@@ -15,7 +16,7 @@ if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
     loader = DataLoader(X, batch_size = len(X))
     real_data = next(iter(loader)).numpy()
-    real_data_reduced = real_sample.reshape(-1, seq_len)
+    real_data_reduced = real_data.reshape(-1, seq_len)
     
     
     
@@ -37,14 +38,13 @@ if __name__ == "__main__":
     synth_data_reduced = synthetic_sample.reshape(-1,seq_len)
     
     
-    ######## pca ######### 
-    pca_real = pd.DataFrame(pca.transform(real_data_reduced))
-    pca_synth = pd.DataFrame(pca.transform(synth_data_reduced))
-    
+    ######## pca #########     
     pca = PCA(n_components=n_components)
     pca.fit(real_data_reduced)
-    
-    
+
+    pca_real = pd.DataFrame(pca.transform(real_data_reduced))
+    pca_synth = pd.DataFrame(pca.transform(synth_data_reduced))
+
     fig = plt.figure(constrained_layout=True, figsize=(20, 10))
     spec = gridspec.GridSpec(ncols=2, nrows=1, figure=fig)
 

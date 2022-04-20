@@ -23,6 +23,8 @@ GRU_LAYERS = 3
 DISC_LAYERS = 3
 FF_LAYERS = 3
 
+FOLDER = "gru"
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ### transformer imports
@@ -313,14 +315,13 @@ if __name__ == "__main__":
     train(model, X, EPOCHS, G_LR, D_LR, BATCH_SIZE)
     
     
-    folder_name = 'gru'
-    if not os.path.exist(folder_name):
-        os.makedir(folder_name)
-    torch.save(model.encoder.state_dict(), folder_name + '/encoder.pt')
-    torch.save(model.decoder.state_dict(), folder_name +'/decoder.pt')
-    torch.save(model.supervisor.state_dict(), folder_name +'/supervisor.pt')
-    torch.save(model.generator.state_dict(), folder_name + '/generator.pt')
-    torch.save(model.discriminator.state_dict(), folder_name + '/discriminator.pt')
+    if not os.path.exists(FOLDER):
+        os.mkdir(FOLDER)
+    torch.save(model.encoder.state_dict(), FOLDER + '/encoder.pt')
+    torch.save(model.decoder.state_dict(), FOLDER +'/decoder.pt')
+    torch.save(model.supervisor.state_dict(), FOLDER +'/supervisor.pt')
+    torch.save(model.generator.state_dict(), FOLDER + '/generator.pt')
+    torch.save(model.discriminator.state_dict(), FOLDER + '/discriminator.pt')
     
 
     generated_data = generate_data(3, 30, model)
