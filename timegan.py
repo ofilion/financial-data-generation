@@ -13,6 +13,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+EPOCHS = 50
+BATCH_SIZE = 128
+G_LR = 1e-3
+D_LR = 1e-5
+HIDDEN_SIZE = 12
+HIDDEN_SIZE_2 = 16
+GRU_LAYERS = 3
+DISC_LAYERS = 3
+FF_LAYERS = 3
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ### transformer imports
 from transformer import *
@@ -206,6 +217,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     for e in range(epochs//2):
         running_loss = 0.
         for X in X_loader:
+            X = X.to(DEVICE)
             running_loss += train_autoencoder_step(X, model, mse_loss, autoencoder_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
@@ -214,6 +226,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     for e in range(epochs//2):
         running_loss = 0.
         for X in X_loader:
+            X = X.to(DEVICE)
             running_loss += train_superviser_step(X, model, mse_loss, supervisor_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
@@ -226,6 +239,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         running_as_loss = 0.
         running_disc_loss = 0.
         for X in X_loader:
+            X = X.to(DEVICE)
             Z = torch.randn_like(X)
             gs_loss = 0.
             as_loss = 0.
@@ -241,10 +255,9 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         print(f"Epoch {e+1}: AS Loss = {running_as_loss/len(X_loader)}, GS Loss = {running_gs_loss/len(X_loader)}, Discriminator Loss = {running_disc_loss/len(X_loader)}")
 
 def generate_data(n_points: int, timesteps: int, model: TimeGAN) -> torch.Tensor:
-    Z = torch.randn((n_points, timesteps, len(RealDataset.FEATURES)))
+    Z = torch.randn((n_points, timesteps, len(RealDataset.FEATURES))).to(DEVICE)
     latent = model.generator(Z)
-    return model.decoder(latent)
-
+    return model.decoder(latent).detach()
 
 
 def visualize(generated_data, real_data, cols):
@@ -264,15 +277,16 @@ def visualize(generated_data, real_data, cols):
 
 
 if __name__ == "__main__":
+    print("Using ", DEVICE)
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
     print(X[0].shape)
   
-    encoder = BasicGRU(7, 12, 3)
-    decoder = FFNN(12, 16, 7, 3)
-    supervisor = BasicGRU(12, 12, 3)
-    generator = BasicGRU(7, 12, 3)
-    discriminator = GRUDiscriminator(12, 16, 3)
+    encoder = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
+    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE_2, len(RealDataset.FEATURES), FF_LAYERS)
+    supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    generator = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
+    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE_2, GRU_LAYERS)
   
     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
     # encoder = TransformerEncoder(3,9,4,3,0.3,30)
@@ -284,8 +298,11 @@ if __name__ == "__main__":
     #     predictor(thing)
     
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 50, 1e-3, 5e-4, 128)
+    train(model, X, EPOCHS, G_LR, D_LR, BATCH_SIZE)
 
     generated_data = generate_data(3, 30, model)
     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
     print(generated_data[0])
+
+    loader = DataLoader(X, batch_size=len(X))
+    X = next(iter(loader)).to_numpy()
