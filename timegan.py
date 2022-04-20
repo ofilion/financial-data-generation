@@ -268,16 +268,15 @@ def visualize(generated_data, real_data, cols):
 if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
-    print(X[0].shape)
     
-    '''
     encoder = BasicGRU(7, 12, 3)
     decoder = FFNN(12, 16, 7, 3)
     supervisor = BasicGRU(12, 12, 3)
     generator = BasicGRU(7, 12, 3)
     discriminator = GRUDiscriminator(12, 16, 3)
-    '''
+    
   
+    '''
     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
     encoder = TransformerEncoder(4,9,6,3,30)
     #input_size, hidden_size, output_size, num_layers
@@ -288,7 +287,7 @@ if __name__ == "__main__":
     
     discriminator_encoder = TransformerEncoder(2,9,4,3,30,False)
     discriminator = TransformerForBinaryClassification(discriminator_encoder)
-    
+    '''
 
     
     X_loader = DataLoader(X, 1, shuffle=True)
@@ -297,7 +296,18 @@ if __name__ == "__main__":
 
 
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 100, 1e-3, 5e-4, 128)
+    train(model, X, 50, 1e-3, 5e-4, 128)
+    
+    
+    folder_name = 'gru'
+    if not os.path.exist(folder_name):
+        os.makedir(folder_name)
+    torch.save(model.encoder.state_dict(), folder_name + '/encoder.pt')
+    torch.save(model.decoder.state_dict(), folder_name +'/decoder.pt')
+    torch.save(model.supervisor.state_dict(), folder_name +'/supervisor.pt')
+    torch.save(model.generator.state_dict(), folder_name + '/generator.pt')
+    torch.save(model.discriminator.state_dict(), folder_name + '/discriminator.pt')
+    
 
     generated_data = generate_data(3, 30, model)
     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
