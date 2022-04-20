@@ -222,7 +222,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
     print("\nTraining supervisor")
-    supervisor_optimizer = Adam(chain(model.encoder.parameters(), model.supervisor.parameters()), lr)
+    supervisor_optimizer = Adam(model.supervisor.parameters(), lr)
     for e in range(epochs//2):
         running_loss = 0.
         for X in X_loader:
