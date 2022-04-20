@@ -309,7 +309,7 @@ if __name__ == "__main__":
     print("here",example[0].shape)
 
 
-    model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
+    model = TimeGAN(encoder, decoder, generator, discriminator, supervisor).to(DEVICE)
     train(model, X, EPOCHS, G_LR, D_LR, BATCH_SIZE)
     
     
