@@ -26,11 +26,11 @@ if __name__ == "__main__":
     generator = BasicGRU(7, 12, 3)
     discriminator = GRUDiscriminator(12, 16, 3)
     
-    encoder.load_state_dict(torch.load(file_path + '/encoder'))
-    decoder.load_state_dict(torch.load(file_path + '/decoder'))
-    supervisor.load_state_dict(torch.load(file_path + '/supervisor'))
-    generator.load_state_dict(torch.load(file_path + '/generator'))
-    discriminator.load_state_dict(torch.load(file_path + '/discriminator'))
+    encoder.load_state_dict(torch.load(file_path + '/encoder.pt'))
+    decoder.load_state_dict(torch.load(file_path + '/decoder.pt'))
+    supervisor.load_state_dict(torch.load(file_path + '/supervisor.pt'))
+    generator.load_state_dict(torch.load(file_path + '/generator.pt'))
+    discriminator.load_state_dict(torch.load(file_path + '/discriminator.pt'))
     
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
     
