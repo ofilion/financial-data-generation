@@ -113,9 +113,8 @@ def train_superviser_step(X: torch.Tensor, model: TimeGAN, criterion: Callable,
     encoded = model.encoder(X)
 
     y = encoded[:, 1:, :]
-    supervisor_input = encoded[:, :-1, :]
 
-    y_hat = model.supervisor(supervisor_input)
+    y_hat = model.supervisor(encoded)[:,:-1,:]
 
     loss = criterion(torch.reshape(y_hat, (-1, y.shape[-1])), torch.reshape(y , (-1, y.shape[-1])))
     loss.backward()
@@ -131,9 +130,8 @@ def train_joint_autoencoder_supervisor_step(X: torch.Tensor, model: TimeGAN, sup
     encoded = model.encoder(X)
 
     # 1. Supervisor
-    supervisor_input = encoded[:, :-1, :]
     y = encoded[:, 1:, :]
-    y_hat = model.supervisor(supervisor_input)
+    y_hat = model.supervisor(encoded)[:, :-1, :]
     sup_loss = sup_criterion(torch.reshape(y_hat, (-1, y.shape[-1])),torch.reshape(y, (-1, y.shape[-1])))
 
     # 2. Autoencoder
@@ -159,9 +157,8 @@ def train_joint_generator_supervisor_step(X: torch.Tensor, Z: torch.Tensor, mode
     disc_loss = loss1 + loss2
 
     encoded_X = model.encoder(X)
-    supervisor_input = encoded_X[:, :-1, :]
     supervisor_y = encoded_X[:, 1:, :]
-    supervisor_y_hat = model.supervisor(supervisor_input)
+    supervisor_y_hat = model.supervisor(encoded_X)[:, :-1, :]
     supervisor_loss = sup_criterion(torch.reshape(supervisor_y_hat, (-1, supervisor_y.shape[-1])),
                                     torch.reshape(supervisor_y, (-1, supervisor_y.shape[-1])))
     
@@ -206,7 +203,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     
     print("\nTraining autoencoder")
     autoencoder_optimizer = Adam(chain(model.encoder.parameters(), model.decoder.parameters()), lr)
-    for e in range(epochs):
+    for e in range(epochs//2):
         running_loss = 0.
         for X in X_loader:
             running_loss += train_autoencoder_step(X, model, mse_loss, autoencoder_optimizer)
@@ -214,7 +211,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
 
     print("\nTraining supervisor")
     supervisor_optimizer = Adam(chain(model.encoder.parameters(), model.supervisor.parameters()), lr)
-    for e in range(epochs):
+    for e in range(epochs//2):
         running_loss = 0.
         for X in X_loader:
             running_loss += train_superviser_step(X, model, mse_loss, supervisor_optimizer)
@@ -287,7 +284,7 @@ if __name__ == "__main__":
     #     predictor(thing)
     
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
-    train(model, X, 50, 1e-3, 1e-5, 128)
+    train(model, X, 50, 1e-3, 5e-4, 128)
 
     generated_data = generate_data(3, 30, model)
     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
