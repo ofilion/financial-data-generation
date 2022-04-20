@@ -15,7 +15,7 @@ if __name__ == "__main__":
     
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
     loader = DataLoader(X, batch_size = len(X))
-    real_data = next(iter(loader)).numpy()
+    real_data = next(iter(loader)).numpy()[0:sample_size]
     real_data_reduced = real_data.reshape(-1, seq_len)
     
     
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
     
-    synthetic_sample = generate_data(real_data.shape[0], 30, model).numpy()
+    synthetic_sample = generate_data(sample_size, 30, model).numpy()
     synth_data_reduced = synthetic_sample.reshape(-1,seq_len)
     
     
