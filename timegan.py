@@ -13,12 +13,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-EPOCHS = 50
+EPOCHS = 20
 BATCH_SIZE = 128
 G_LR = 1e-3
 D_LR = 5e-4
-HIDDEN_SIZE = 12
-HIDDEN_SIZE_2 = 16
+HIDDEN_SIZE = 7
+HIDDEN_SIZE_2 = 4
 GRU_LAYERS = 3
 DISC_LAYERS = 3
 FF_LAYERS = 3

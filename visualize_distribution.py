@@ -18,13 +18,11 @@ if __name__ == "__main__":
     real_data = next(iter(loader)).numpy()[0:sample_size]
     real_data_reduced = real_data.reshape(-1, seq_len)
     
-    
-    
-    encoder = BasicGRU(7, 12, 3)
-    decoder = FFNN(12, 16, 7, 3)
-    supervisor = BasicGRU(12, 12, 3)
-    generator = BasicGRU(7, 12, 3)
-    discriminator = GRUDiscriminator(12, 16, 3)
+    encoder = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
+    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE_2, len(RealDataset.FEATURES), FF_LAYERS)
+    supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    generator = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
+    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE_2, GRU_LAYERS)
     
     encoder.load_state_dict(torch.load(file_path + '/encoder.pt'))
     decoder.load_state_dict(torch.load(file_path + '/decoder.pt'))
