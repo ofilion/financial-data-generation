@@ -210,7 +210,7 @@ class TransformerForPrediction(Module):
         x = torch.mean(x, dim=1) 
 
         x = self.lin1(x)
-        X = torch.relu(x)
+        x = torch.relu(x)
         return self.out(x)
 
         
