@@ -1,6 +1,7 @@
 
 import os
 import datetime as dt
+from tkinter import HIDDEN
 from typing import Callable
 from itertools import chain
 
@@ -14,11 +15,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 EPOCHS = 20
-BATCH_SIZE = 128
+BATCH_SIZE = 512
 G_LR = 1e-3
 D_LR = 5e-4
-HIDDEN_SIZE = 7
-HIDDEN_SIZE_2 = 4
+INPUT_SIZE = 7
+HIDDEN_SIZE = 32
 GRU_LAYERS = 3
 DISC_LAYERS = 3
 FF_LAYERS = 3
@@ -43,12 +44,14 @@ class RealDataset(Dataset):
         self.mean = self.df.mean()
         self.std = self.df.std(ddof=1)
         self.norm_df = (self.df - self.mean) / self.std
+        self.data = torch.Tensor(self.norm_df.values.astype(np.float32)).to(DEVICE)
 
     def __len__(self):
         return len(self.df) - self.timesteps
 
     def __getitem__(self, index) -> torch.Tensor:
-        return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
+       #return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
+       return self.data[index:index+self.timesteps]
 
 class TimeGAN(Module):
 
@@ -66,11 +69,11 @@ class TimeGAN(Module):
     
 class BasicGRU(Module):
 
-    def __init__(self, input_size, hidden_size, num_layers, bidirectional=False) -> None:
+    def __init__(self, input_size, hidden_size, output_size, num_layers, bidirectional=False) -> None:
         super().__init__()
         self.rnn = GRU(input_size, hidden_size, num_layers, batch_first=True,
                        bidirectional=bidirectional)
-        self.linear = Linear(hidden_size * (2 if bidirectional else 1), hidden_size)
+        self.linear = Linear(hidden_size * (2 if bidirectional else 1),  output_size)
 
     def forward(self, X):
         X, _ = self.rnn(X)
@@ -80,9 +83,9 @@ class GRUDiscriminator(Module):
 
     def __init__(self, input_size, hidden_size, num_layers) -> None:
         super(GRUDiscriminator, self).__init__()
-        self.gru = BasicGRU(input_size, hidden_size, num_layers, bidirectional=True)
-        self.lin1 = Linear(hidden_size, hidden_size)
-        self.out = Linear(hidden_size, 1)
+        self.gru = BasicGRU(hidden_size, hidden_size, hidden_size, num_layers, bidirectional=True)
+        self.lin1 = Linear(hidden_size, input_size)
+        self.out = Linear(input_size, 1)
 
     def forward(self, X):
         X = self.gru(X)
@@ -176,10 +179,12 @@ def train_joint_generator_supervisor_step(X: torch.Tensor, Z: torch.Tensor, mode
                                     torch.reshape(supervisor_y, (-1, supervisor_y.shape[-1])))
     
     # x_hat = model.decoder(supervised_latent_space)
-    x_hat = generated_latent_space
     # x_hat is (batch_size, timesteps, features)
+    x_hat = model.decoder(generated_latent_space)
+    
     real_std, real_mean = torch.std_mean(X.view(-1, X.shape[-1]), dim=0)
     pred_std, pred_mean = torch.std_mean(x_hat.view(-1, x_hat.shape[-1]), dim=0)
+
     mean_loss = torch.mean(torch.abs(real_mean - pred_mean))
     std_loss = torch.mean(torch.abs(real_std - pred_std))
     moments_loss = mean_loss + std_loss
@@ -217,19 +222,18 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     
     print("\nTraining autoencoder")
     autoencoder_optimizer = Adam(chain(model.encoder.parameters(), model.decoder.parameters()), lr)
-    for e in range(epochs//2):
+    for e in range(epochs):
         running_loss = 0.
         for X in X_loader:
-            X = X.to(DEVICE)
+            #X = X.to(DEVICE)
             running_loss += train_autoencoder_step(X, model, mse_loss, autoencoder_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
     print("\nTraining supervisor")
     supervisor_optimizer = Adam(model.supervisor.parameters(), lr)
-    for e in range(epochs//2):
+    for e in range(epochs):
         running_loss = 0.
         for X in X_loader:
-            X = X.to(DEVICE)
             running_loss += train_superviser_step(X, model, mse_loss, supervisor_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
@@ -242,7 +246,6 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         running_as_loss = 0.
         running_disc_loss = 0.
         for X in X_loader:
-            X = X.to(DEVICE)
             Z = torch.randn_like(X)
             gs_loss = 0.
             as_loss = 0.
@@ -286,31 +289,31 @@ if __name__ == "__main__":
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
 
     print(X[0].shape)
+    input_size = len(RealDataset.FEATURES)
+
+    encoder = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+    supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    generator = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
   
-    encoder = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
-    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE_2, len(RealDataset.FEATURES), FF_LAYERS)
-    supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    generator = BasicGRU(len(RealDataset.FEATURES), HIDDEN_SIZE, GRU_LAYERS)
-    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE_2, GRU_LAYERS)
-  
-    '''
-    #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
-    encoder = TransformerEncoder(4,9,6,3,30)
-    #input_size, hidden_size, output_size, num_layers
-    decoder = FFNN(9, 14, 7, 3)
-    supervisor = TransformerEncoder(4,9,6,3,30,False)
-   # supervisor = TransformerForPrediction(supervisor_encoder)
-    generator = TransformerEncoder(4,9,6,3,30)
+
+#     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
+#     encoder = TransformerEncoder(4,9,6,3,30)
+#     #input_size, hidden_size, output_size, num_layers
+#     decoder = FFNN(9, 14, 7, 3)
+#     supervisor = TransformerEncoder(4,9,6,3,30,False)
+#    # supervisor = TransformerForPrediction(supervisor_encoder)
+#     generator = TransformerEncoder(4,9,6,3,30)
     
-    discriminator_encoder = TransformerEncoder(2,9,4,3,30,False)
-    discriminator = TransformerForBinaryClassification(discriminator_encoder)
-    '''
+#     discriminator_encoder = TransformerEncoder(2,9,4,3,30,False)
+#     discriminator = TransformerForBinaryClassification(discriminator_encoder)
+
 
     
     X_loader = DataLoader(X, 1, shuffle=True)
     example = next(iter(X_loader))
     print("here",example[0].shape)
-
 
     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor).to(DEVICE)
     train(model, X, EPOCHS, G_LR, D_LR, BATCH_SIZE)
@@ -325,12 +328,12 @@ if __name__ == "__main__":
     torch.save(model.discriminator.state_dict(), FOLDER + '/discriminator.pt')
     
 
-    generated_data = generate_data(3, 30, model)
-    generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
-    print(generated_data[0].shape)
+#     generated_data = generate_data(3, 30, model).cpu()
+#     generated_data * torch.from_numpy(X.std.values) + torch.from_numpy(X.mean.values)
+#     print(generated_data[0].shape)
     
-    cols = [
-    "Return","Open-Close",'Open-Low',"Open-High","Normalized Volume", "VIX", "VIX Open-close"
-]
-    visualize(generated_data[0].detach(), example[0].detach(), cols)
+#     cols = [
+#     "Return","Open-Close",'Open-Low',"Open-High","Normalized Volume", "VIX", "VIX Open-close"
+# ]
+#     visualize(generated_data[0].detach().cpu(), example[0].detach().cpu(), cols)
     
