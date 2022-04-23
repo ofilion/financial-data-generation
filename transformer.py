@@ -214,7 +214,6 @@ class TransformerForPrediction(Module):
         return self.out(x)
 
         
-        
 class TransformerForBinaryClassification(Module):
     
     def __init__(self,encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
@@ -227,7 +226,7 @@ class TransformerForBinaryClassification(Module):
         
     def forward(self, x):
         x = self.encoder(x)
-        x = torch.mean(x, dim=1)
+       # x = torch.mean(x, dim=1)
         x = self.l1(x)
         x = self.gelu(x)
         return self.out(x)
