@@ -2,6 +2,7 @@ import torch
 from torch.nn import Module, Linear, MSELoss, ModuleList, Conv1d, Dropout, LayerNorm, parameter, GELU
 import torch.nn.functional as F
 import math
+import numpy as np
 
 
 def do_attention(query,key,value, mask= None):
@@ -13,6 +14,19 @@ def do_attention(query,key,value, mask= None):
     
     attention_weights = F.softmax(attention_scores,dim=1)
     return torch.bmm(attention_weights, value)    
+
+
+def get_positional_encoding(seq_len, dim):
+    
+    positional_embed = torch.zeros((seq_len, dim))
+    
+    for t in range(seq_len):
+        for i in range(dim//2):
+            positional_embed[t,2*i] = np.sin(t/10000**(2*i/dim))
+            positional_embed[t,2*i+1] = np.cos(t/10000**(2*i/dim))
+    return positional_embed
+                                             
+
 
 
 class AttentionHead(Module):
@@ -44,7 +58,7 @@ class MultiHeadAttention(Module):
         )
         
       #  self.output = Linear(hidden_size*num_heads, hidden_size)
-        self.output = Linear(hidden_size, hidden_size)
+        self.output = Linear(num_heads*head_dim, hidden_size)
         
     def forward(self, h):
         x = torch.cat([head(h) for head in self.heads], dim = -1)
@@ -121,6 +135,7 @@ class TransformerEncoderLayer(Module):
     
     def forward(self, x):
         hidden = self.layer_norm1(x)
+        
         #skip connection as in resnet
         x = x + self.attention(hidden)
         # skip connection
@@ -167,26 +182,49 @@ class TransformerDecoderLayer(Module):
         return x
         
             
-
+class Embedding(Module):
+    
+    def __init__(self, dim, dropout_prob= 0.3) -> None:
+        super().__init__()
+        
+        self.layer_norm = LayerNorm(dim)
+        self.dropout = Dropout(dropout_prob)
+        self.linear =  Linear(dim, dim)
+        
+        
+    def forward(self, x):
+        x = self.layer_norm(x)
+        x = self.linear(x)
+        x = self.dropout(x)
+        x = torch.relu(x)
+        return x
+        
     
 class TransformerEncoder(Module):
     
     def __init__(self, num_hidden, hidden_size, intermediate_size, 
-                         num_heads, seq_len,embed = True, dropout_prob=0.3) -> None:
+                         num_heads, seq_len,  dropout_prob=0.3) -> None:
         
         super().__init__()
-        self.embed = embed
+        self.seq_len = seq_len
+        self.dim = hidden_size
+        self.embed = Embedding(self.dim,dropout_prob)
+
         self.hidden_dim = hidden_size
-        self.time_embedding = Time2Vec(seq_len)
+        #self.time_embedding = Time2Vec(seq_len)
         self.layers = ModuleList([TransformerEncoderLayer(hidden_size, intermediate_size, num_heads, dropout_prob)
                                  for _ in range(num_hidden)])
         
     def forward(self, x):
+        '''
         # get time embedding
         if self.embed:
             time = self.time_embedding(x)
             x = torch.cat([x,time],axis=-1)
         # concatenate it to input
+        '''
+        positional = get_positional_encoding(self.seq_len, self.dim)
+        x = self.embed(x) + positional
         for layer in self.layers:
             #print(x.shape)
             x = layer(x)
@@ -229,5 +267,5 @@ class TransformerForBinaryClassification(Module):
        # x = torch.mean(x, dim=1)
         x = self.l1(x)
         x = self.gelu(x)
-        return self.out(x)
+        return torch.sigmoid(self.out(x))
         
