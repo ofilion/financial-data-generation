@@ -74,7 +74,7 @@ class BasicGRU(Module):
 
     def forward(self, X):
         X, _ = self.rnn(X)
-        return torch.sigmoid(self.linear(X))
+        return F.leaky_relu(self.linear(X))
 
 class GRUDiscriminator(Module):
 
