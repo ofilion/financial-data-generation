@@ -1,20 +1,19 @@
 
 import os
 import datetime as dt
-from tkinter import HIDDEN
 from typing import Callable
 from itertools import chain
 
 import torch
-from torch.nn import Module, GRU, Linear, MSELoss, ModuleList, BCEWithLogitsLoss
+from torch.nn import Module, GRU, Linear, MSELoss, ModuleList, BCELoss
 from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 
-EPOCHS = 20
+EPOCHS = 100
 BATCH_SIZE = 512
 G_LR = 1e-3
 D_LR = 5e-4
@@ -41,17 +40,20 @@ class RealDataset(Dataset):
         self.timesteps = timesteps
 
         self.df = self.df[RealDataset.FEATURES]
-        self.mean = self.df.mean()
-        self.std = self.df.std(ddof=1)
-        self.norm_df = (self.df - self.mean) / self.std
-        self.data = torch.Tensor(self.norm_df.values.astype(np.float32)).to(DEVICE)
+        self.max = self.df.max()
+        self.min = self.df.min()
+        self.norm_df = (self.df - self.min) / (self.max - self.min)
+        # self.mean = self.df.mean()
+        # self.std = self.df.std(ddof=1)
+        # self.norm_df = (self.df - self.mean) / self.std
+        # self.data = torch.Tensor(self.norm_df.values.astype(np.float32)).to(DEVICE)
 
     def __len__(self):
         return len(self.df) - self.timesteps
 
     def __getitem__(self, index) -> torch.Tensor:
-       #return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
-       return self.data[index:index+self.timesteps]
+       return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
+    #    return self.data[index:index+self.timesteps]
 
 class TimeGAN(Module):
 
@@ -77,7 +79,7 @@ class BasicGRU(Module):
 
     def forward(self, X):
         X, _ = self.rnn(X)
-        return F.leaky_relu(self.linear(X))
+        return torch.sigmoid(self.linear(X))
 
 class GRUDiscriminator(Module):
 
@@ -89,7 +91,7 @@ class GRUDiscriminator(Module):
 
     def forward(self, X):
         X = self.gru(X)
-        X = torch.mean(X, dim=1)    # Average accross timesteps
+        # X = torch.mean(X, dim=1)    # Average accross timesteps
 
         X = self.lin1(X)
         X = torch.relu(X)
@@ -180,7 +182,7 @@ def train_joint_generator_supervisor_step(X: torch.Tensor, Z: torch.Tensor, mode
     
     # x_hat = model.decoder(supervised_latent_space)
     # x_hat is (batch_size, timesteps, features)
-    x_hat = model.decoder(generated_latent_space)
+    x_hat = model.decoder(supervised_latent_space)
     
     real_std, real_mean = torch.std_mean(X.view(-1, X.shape[-1]), dim=0)
     pred_std, pred_mean = torch.std_mean(x_hat.view(-1, x_hat.shape[-1]), dim=0)
@@ -216,16 +218,17 @@ def train_discriminator_step(X: torch.Tensor, Z: torch.Tensor, model: TimeGAN, c
 
 def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, batch_size: int):
 
+    model.train()
     X_loader = DataLoader(X_ds, batch_size, shuffle=True)
     mse_loss = MSELoss()
-    bce_loss = BCEWithLogitsLoss()
+    bce_loss = BCELoss()
     
     print("\nTraining autoencoder")
     autoencoder_optimizer = Adam(chain(model.encoder.parameters(), model.decoder.parameters()), lr)
     for e in range(epochs):
         running_loss = 0.
         for X in X_loader:
-            #X = X.to(DEVICE)
+            X = X.to(DEVICE)
             running_loss += train_autoencoder_step(X, model, mse_loss, autoencoder_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
@@ -234,6 +237,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     for e in range(epochs):
         running_loss = 0.
         for X in X_loader:
+            X = X.to(DEVICE)
             running_loss += train_superviser_step(X, model, mse_loss, supervisor_optimizer)
         print(f"Epoch {e+1}: Loss = {running_loss/len(X_loader)}")
 
@@ -246,10 +250,11 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         running_as_loss = 0.
         running_disc_loss = 0.
         for X in X_loader:
+            X = X.to(DEVICE)
             Z = torch.randn_like(X)
             gs_loss = 0.
             as_loss = 0.
-            k = 3
+            k = 2
             for _ in range(k):
                 gs_loss += train_joint_generator_supervisor_step(X, Z, model, mse_loss, mse_loss, gs_optimizer)
                 as_loss += train_joint_autoencoder_supervisor_step(X, model, mse_loss, mse_loss, as_optimizer)
@@ -259,6 +264,8 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
             running_disc_loss += train_discriminator_step(X, Z, model, bce_loss, disc_optimizer)
 
         print(f"Epoch {e+1}: AS Loss = {running_as_loss/len(X_loader)}, GS Loss = {running_gs_loss/len(X_loader)}, Discriminator Loss = {running_disc_loss/len(X_loader)}")
+
+    model.eval()
 
 def generate_data(n_points: int, timesteps: int, model: TimeGAN) -> torch.Tensor:
     Z = torch.randn((n_points, timesteps, len(RealDataset.FEATURES))).to(DEVICE)
@@ -292,11 +299,12 @@ if __name__ == "__main__":
     input_size = len(RealDataset.FEATURES)
 
     encoder = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+    # decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+    decoder = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, input_size, GRU_LAYERS)
     supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
     generator = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-  
+    # discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    discriminator = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, 1, DISC_LAYERS, bidirectional=True)
 
 #     #num_hidden, hidden_size, intermediate_size, num_heads, dropout_prob, seq_len
 #     encoder = TransformerEncoder(4,9,6,3,30)
@@ -321,11 +329,11 @@ if __name__ == "__main__":
     
     if not os.path.exists(FOLDER):
         os.mkdir(FOLDER)
-    torch.save(model.encoder.state_dict(), FOLDER + '/encoder.pt')
-    torch.save(model.decoder.state_dict(), FOLDER +'/decoder.pt')
-    torch.save(model.supervisor.state_dict(), FOLDER +'/supervisor.pt')
-    torch.save(model.generator.state_dict(), FOLDER + '/generator.pt')
-    torch.save(model.discriminator.state_dict(), FOLDER + '/discriminator.pt')
+    torch.save(model.encoder.cpu().state_dict(), FOLDER + '/encoder.pt')
+    torch.save(model.decoder.cpu().state_dict(), FOLDER +'/decoder.pt')
+    torch.save(model.supervisor.cpu().state_dict(), FOLDER +'/supervisor.pt')
+    torch.save(model.generator.cpu().state_dict(), FOLDER + '/generator.pt')
+    torch.save(model.discriminator.cpu().state_dict(), FOLDER + '/discriminator.pt')
     
 
 #     generated_data = generate_data(3, 30, model).cpu()

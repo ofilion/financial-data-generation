@@ -2,6 +2,7 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import numpy as np
 from timegan import *
+import matplotlib as plt
 import matplotlib.gridspec as gridspec
 
 n_components = 2
