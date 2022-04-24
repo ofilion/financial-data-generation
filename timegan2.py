@@ -18,12 +18,14 @@ HIDDEN_DIM = 24
 NOISE_DIM = 32
 BATCH_SIZE = 128
 SEQUENCE_LENGTH = 30
-TRAIN_STEPS = 0
+TRAIN_STEPS = 10000
 G_LR = 5e-6
 D_LR = 5e-6
 GAMMA = 1
 
 FOLDER = "gru2-stock"
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class BasicGRU(Module):
@@ -202,11 +204,11 @@ def sample(n_samples, generator: Generator):
     return torch.vstack(data)
 
 if __name__ == "__main__":
-    generator_aux = BasicGRU(NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM)
-    supervisor = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM, num_layers=2)
-    discriminator = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, output_dim=1)
-    recovery = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM)
-    embedder = BasicGRU(INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM)
+    generator_aux = BasicGRU(NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM).to(DEVICE)
+    supervisor = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM, num_layers=2).to(DEVICE)
+    discriminator = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, output_dim=1).to(DEVICE)
+    recovery = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM).to(DEVICE)
+    embedder = BasicGRU(INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM).to(DEVICE)
 
     autoencoder = Autoencoder(embedder, recovery)
     adversarial_supervised = Adversarial(generator_aux, discriminator, supervisor=supervisor)
@@ -226,13 +228,13 @@ if __name__ == "__main__":
     ## Embedding network training
     autoencoder_opt = Adam(chain(embedder.parameters(), recovery.parameters()), lr=G_LR)
     for _ in tqdm(range(TRAIN_STEPS), desc="Embedding network training"):
-        X_ = next(get_batch_data(train_ds))
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
         step_e_loss_t0 = train_autoencoder(X_, autoencoder_opt, autoencoder)
 
     ## Supervised network training
     supervisor_opt = Adam(chain(supervisor.parameters(), generator.parameters()), lr=G_LR)
     for _ in tqdm(range(TRAIN_STEPS), desc="Supervised network training"):
-        X_ = next(get_batch_data(train_ds))
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
         step_g_loss_s = train_supervisor(X_, supervisor_opt, embedder, supervisor)
 
     ## Joint training
@@ -243,14 +245,14 @@ if __name__ == "__main__":
     step_g_loss_u = step_g_loss_s = step_g_loss_v = step_e_loss_t0 = step_d_loss = 0
     for _ in tqdm(range(TRAIN_STEPS), desc="Joint networks training"):
         for _ in range(2):
-            X_ = next(get_batch_data(train_ds))
-            Z_ = get_batch_noise()
+            X_ = next(get_batch_data(train_ds)).to(DEVICE)
+            Z_ = get_batch_noise().to(DEVICE)
 
             step_g_loss_u, step_g_loss_S, step_g_loss_v = train_generator(X_,Z_, generator_opt, adversarial_supervised, adversarial_embedded, embedder, supervisor, generator)
             step_e_loss_t0 = train_embedder(X_, embedder_opt, embedder, supervisor, autoencoder)
 
-        X_ = next(get_batch_data(train_ds))
-        Z_ = get_batch_noise()
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
+        Z_ = get_batch_noise().to(DEVICE)
         step_d_loss = discriminator_loss(X_, Z_, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
         if step_d_loss > 0.15:
             step_d_loss = train_discriminator(X_, Z_, discriminator_opt, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
