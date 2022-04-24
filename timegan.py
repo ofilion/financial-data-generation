@@ -55,6 +55,22 @@ class RealDataset(Dataset):
        return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
     #    return self.data[index:index+self.timesteps]
 
+class StockData(Dataset):
+
+    def __init__(self, filepath:str, timesteps=30) -> None:
+        super(StockData, self).__init__()
+        self.df = pd.read_csv(filepath)
+        self.timesteps = timesteps
+        self.max = self.df.max()
+        self.min = self.df.min()
+        self.norm_df = (self.df - self.min) / (self.max - self.min)
+
+    def __len__(self):
+        return len(self.df) - self.timesteps
+
+    def __getitem__(self, index):
+        return torch.from_numpy(self.norm_df[index:index+self.timesteps].values).float()
+
 class TimeGAN(Module):
 
     def __init__(self, encoder, decoder, generator, discriminator, supervisor) -> None:

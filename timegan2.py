@@ -11,19 +11,19 @@ from torch.nn import Module, Linear, GRU
 import torch.nn.functional as F
 from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
-from timegan import RealDataset
+from timegan import RealDataset, StockData
 
-INPUT_DIM = len(RealDataset.FEATURES)
+INPUT_DIM = 6#len(RealDataset.FEATURES)
 HIDDEN_DIM = 24
 NOISE_DIM = 32
 BATCH_SIZE = 128
 SEQUENCE_LENGTH = 30
-TRAIN_STEPS = 2
-G_LR = 1e-4
-D_LR = 1e-4
+TRAIN_STEPS = 100
+G_LR = 5e-4
+D_LR = 5e-4
 GAMMA = 1
 
-FOLDER = "gru2"
+FOLDER = "gru2-stock"
 
 
 class BasicGRU(Module):
@@ -197,7 +197,7 @@ def sample(n_samples, generator: Generator):
     data = []
     for _ in trange(steps, desc="Synthetic data generation"):
         Z_ = get_batch_noise()
-        records = generator(Z_)
+        records = generator(Z_).detach()
         data.append(records)
     return torch.vstack(data)
 
@@ -214,7 +214,8 @@ if __name__ == "__main__":
     generator = Generator(generator_aux, supervisor, recovery)
     discriminator_model = DiscriminatorModel(embedder, discriminator)
 
-    train_ds = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 3, 1), dt.datetime(2019, 12, 31), timesteps=SEQUENCE_LENGTH)
+    # train_ds = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 3, 1), dt.datetime(2019, 12, 31), timesteps=SEQUENCE_LENGTH)
+    train_ds = StockData(os.path.join("data", "stock_data.csv"), timesteps=SEQUENCE_LENGTH)
 
     generator_aux.train()
     supervisor.train()

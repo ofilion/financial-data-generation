@@ -1,14 +1,16 @@
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import numpy as np
-from timegan import *
+# from timegan import *
+from timegan2 import *
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+import pandas as pd
 
 n_components = 2
 seq_len = 30
 sample_size = 100
-file_path = 'gru'
+file_path = 'gru2'
 
 
 if __name__ == "__main__":
@@ -16,20 +18,20 @@ if __name__ == "__main__":
     
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
     loader = DataLoader(X, batch_size = len(X))
-    real_data = next(iter(loader)).numpy()[0:sample_size]
-    real_data_reduced = real_data.reshape(-1, seq_len)
+    real_data = next(iter(loader)).numpy()[:sample_size]
+    real_data_reduced = real_data.reshape(-1, SEQUENCE_LENGTH * INPUT_DIM)
     input_size = len(RealDataset.FEATURES)
     
 
     
     
-    encoder = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    # decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
-    decoder = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, input_size, GRU_LAYERS)
-    supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    generator = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    # discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    discriminator = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, 1, DISC_LAYERS, bidirectional=True)
+#     encoder = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+#     # decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+#     decoder = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, input_size, GRU_LAYERS)
+#     supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+#     generator = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+#     # discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+#     discriminator = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, 1, DISC_LAYERS, bidirectional=True)
     
     
     '''
@@ -41,16 +43,36 @@ if __name__ == "__main__":
     discriminator = TransformerForBinaryClassification(discriminator_encoder)
     '''
     
-    encoder.load_state_dict(torch.load(file_path + '/encoder.pt'))
-    decoder.load_state_dict(torch.load(file_path + '/decoder.pt'))
-    supervisor.load_state_dict(torch.load(file_path + '/supervisor.pt'))
-    generator.load_state_dict(torch.load(file_path + '/generator.pt'))
-    discriminator.load_state_dict(torch.load(file_path + '/discriminator.pt'))
+#     encoder.load_state_dict(torch.load(file_path + '/encoder.pt'))
+#     decoder.load_state_dict(torch.load(file_path + '/decoder.pt'))
+#     supervisor.load_state_dict(torch.load(file_path + '/supervisor.pt'))
+#     generator.load_state_dict(torch.load(file_path + '/generator.pt'))
+#     discriminator.load_state_dict(torch.load(file_path + '/discriminator.pt'))
     
-    model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
+#     model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
     
-    synthetic_sample = generate_data(sample_size, 30, model).numpy()
-    synth_data_reduced = synthetic_sample.reshape(-1,seq_len)
+#     synthetic_sample = generate_data(sample_size, 30, model).numpy()
+
+    generator_aux = BasicGRU(NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM)
+    supervisor = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM, num_layers=2)
+    discriminator = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, output_dim=1)
+    recovery = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM)
+    embedder = BasicGRU(INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM)
+
+    autoencoder = Autoencoder(embedder, recovery)
+    adversarial_supervised = Adversarial(generator_aux, discriminator, supervisor=supervisor)
+    adversarial_embedded = Adversarial(generator_aux, discriminator, supervisor=None)
+    generator = Generator(generator_aux, supervisor, recovery)
+    discriminator_model = DiscriminatorModel(embedder, discriminator)
+
+    generator_aux.load_state_dict(torch.load(os.path.join(file_path, "generator_aux.pt")))
+    supervisor.load_state_dict(torch.load(os.path.join(file_path, "supervisor.pt")))
+    discriminator.load_state_dict(torch.load(os.path.join(file_path, "discriminator.pt")))
+    recovery.load_state_dict(torch.load(os.path.join(file_path, "recovery.pt")))
+    embedder.load_state_dict(torch.load(os.path.join(file_path, "embedder.pt")))
+
+    synthetic_sample = sample(sample_size, generator).numpy()
+    synth_data_reduced = synthetic_sample.reshape(-1, SEQUENCE_LENGTH * INPUT_DIM)
     
     
     ######## pca #########     
@@ -94,9 +116,9 @@ if __name__ == "__main__":
               pad=10)
 
     # t-SNE scatter plot
-    plt.scatter(tsne_results.iloc[:700, 0].values, tsne_results.iloc[:700, 1].values,
+    plt.scatter(tsne_results.iloc[:sample_size, 0].values, tsne_results.iloc[:sample_size, 1].values,
             c='black', alpha=0.2, label='Original')
-    plt.scatter(tsne_results.iloc[700:, 0], tsne_results.iloc[700:, 1],
+    plt.scatter(tsne_results.iloc[sample_size:, 0], tsne_results.iloc[sample_size:, 1],
             c='red', alpha=0.2, label='Synthetic')
 
     ax2.legend()
@@ -116,11 +138,12 @@ if __name__ == "__main__":
     for j, col in enumerate(cols):
     
         frame = pd.DataFrame({'Real': real_data[0,:, j],
-                   'Synthetic': synthetic_sample [0,:, j]})
+                   'Synthetic': synthetic_sample[0,:, j]})
         frame.plot(ax=axes[j],
                    title = col,
                    secondary_y='Synthetic data', style=['-', '--'])
     fig.tight_layout()
+    plt.show()
     
     
     
