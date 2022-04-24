@@ -2,31 +2,44 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import numpy as np
 from timegan import *
-import matplotlib as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 
 n_components = 2
 seq_len = 30
 sample_size = 100
 file_path = 'gru'
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 if __name__ == "__main__":
-    print("hello")
+   
     
     X = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 1, 3), dt.datetime(2019, 12, 31))
     loader = DataLoader(X, batch_size = len(X))
-    real_data = next(iter(loader)).cpu().numpy()[0:sample_size]
+    real_data = next(iter(loader)).numpy()[0:sample_size]
     real_data_reduced = real_data.reshape(-1, seq_len)
-    
     input_size = len(RealDataset.FEATURES)
+    
+
+    
+    
     encoder = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+    # decoder = FFNN(HIDDEN_SIZE, HIDDEN_SIZE, input_size, FF_LAYERS)
+    decoder = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, input_size, GRU_LAYERS)
     supervisor = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
     generator = BasicGRU(input_size, HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
-    discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    # discriminator = GRUDiscriminator(HIDDEN_SIZE, HIDDEN_SIZE, GRU_LAYERS)
+    discriminator = BasicGRU(HIDDEN_SIZE, HIDDEN_SIZE, 1, DISC_LAYERS, bidirectional=True)
+    
+    
+    '''
+    encoder = TransformerEncoder(4,7,30,3,30)
+    decoder = FFNN(7, 30, 7, 3)
+    supervisor = TransformerEncoder(4,7,30,3,30)
+    generator = TransformerEncoder(4,7,30,3,30)
+    discriminator_encoder = TransformerEncoder(2,7,30,3,30)
+    discriminator = TransformerForBinaryClassification(discriminator_encoder)
+    '''
     
     encoder.load_state_dict(torch.load(file_path + '/encoder.pt'))
     decoder.load_state_dict(torch.load(file_path + '/decoder.pt'))
@@ -34,9 +47,9 @@ if __name__ == "__main__":
     generator.load_state_dict(torch.load(file_path + '/generator.pt'))
     discriminator.load_state_dict(torch.load(file_path + '/discriminator.pt'))
     
-    model = TimeGAN(encoder, decoder, generator, discriminator, supervisor).to(DEVICE)
+    model = TimeGAN(encoder, decoder, generator, discriminator, supervisor)
     
-    synthetic_sample = generate_data(sample_size, 30, model).cpu().numpy()
+    synthetic_sample = generate_data(sample_size, 30, model).numpy()
     synth_data_reduced = synthetic_sample.reshape(-1,seq_len)
     
     
@@ -64,7 +77,6 @@ if __name__ == "__main__":
             c='red', alpha=0.2, label='Synthetic')
     
     ax.legend()
-    #plt.savefig("pca.png")
     plt.show()
     
     ########## tnse ###########
@@ -88,8 +100,31 @@ if __name__ == "__main__":
             c='red', alpha=0.2, label='Synthetic')
 
     ax2.legend()
-    #plt.savefig("tsne.png")
     plt.show()
+    
+    
+    ######## visualize ########
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(15, 10))
+    axes=axes.flatten()
+   
+    cols = [
+    "Return","Open-Close",'Open-Low',"Open-High","Normalized Volume", "VIX", "VIX Open-close"
+]
+  
+   
+    time = list(range(1,30))
+    for j, col in enumerate(cols):
+    
+        frame = pd.DataFrame({'Real': real_data[0,:, j],
+                   'Synthetic': synthetic_sample [0,:, j]})
+        frame.plot(ax=axes[j],
+                   title = col,
+                   secondary_y='Synthetic data', style=['-', '--'])
+    fig.tight_layout()
+    
+    
+    
+    
     
     
     
