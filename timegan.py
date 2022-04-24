@@ -251,7 +251,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
         running_disc_loss = 0.
         for X in X_loader:
             X = X.to(DEVICE)
-            Z = torch.randn_like(X)
+            Z = torch.rand_like(X)
             gs_loss = 0.
             as_loss = 0.
             k = 2
@@ -268,7 +268,7 @@ def train(model: TimeGAN, X_ds: Dataset, epochs: int, lr: float, d_lr: float, ba
     model.eval()
 
 def generate_data(n_points: int, timesteps: int, model: TimeGAN) -> torch.Tensor:
-    Z = torch.randn((n_points, timesteps, len(RealDataset.FEATURES))).to(DEVICE)
+    Z = torch.rand((n_points, timesteps, len(RealDataset.FEATURES))).to(DEVICE)
     latent = model.generator(Z)
     return model.decoder(latent).detach()
 
