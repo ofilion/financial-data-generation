@@ -123,13 +123,14 @@ class FeedForward(Module):
     
 class TransformerEncoderLayer(Module):
     
-    def __init__(self, hidden_size, intermediate_size, num_heads, dropout_prob=0.3) -> None:
+    def __init__(self, hidden_size, intermediate_size, output_size, num_heads, dropout_prob=0.3) -> None:
         super().__init__()
         # layer norm is prefered for transformer
         self.layer_norm1 = LayerNorm(hidden_size)
         self.layer_norm2 = LayerNorm(hidden_size)
         self.attention = MultiHeadAttention(hidden_size, num_heads)
-        self.ff = FeedForward(hidden_size ,intermediate_size, dropout_prob)
+        self.ff = FeedForward(hidden_size ,intermediate_size,dropout_prob)
+        self.out = Linear(hidden_size, output_size)
         
     
     def forward(self, x):
@@ -140,12 +141,12 @@ class TransformerEncoderLayer(Module):
         # skip connection
         x = x + self.ff(self.layer_norm2(x))
         # skip connection
-        return x
+        return self.out(x)
     
     
 class TransformerDecoderLayer(Module):
     
-    def __init__(self,hidden_size, intermediate_size, num_heads, dropout_prob=0.3) -> None:
+    def __init__(self,hidden_size, intermediate_size, output_size ,num_heads, dropout_prob=0.3) -> None:
         super().__init__()
         self.layer_norm1 = LayerNorm(hidden_size)
         self.layer_norm2 = LayerNorm(hidden_size)
@@ -201,7 +202,7 @@ class Embedding(Module):
     
 class TransformerEncoder(Module):
     
-    def __init__(self, num_hidden, hidden_size, intermediate_size, 
+    def __init__(self, num_hidden, hidden_size, intermediate_size, output_size, 
                          num_heads, seq_len,  dropout_prob=0.3) -> None:
         
         super().__init__()
@@ -211,8 +212,13 @@ class TransformerEncoder(Module):
 
         self.hidden_dim = hidden_size
         #self.time_embedding = Time2Vec(seq_len)
-        self.layers = ModuleList([TransformerEncoderLayer(hidden_size, intermediate_size, num_heads, dropout_prob)
-                                 for _ in range(num_hidden)])
+        self.layers = ModuleList(
+            [TransformerEncoderLayer(hidden_size, intermediate_size, hidden_size 
+                                     ,num_heads, dropout_prob)
+                                 for _ in range(num_hidden-1)]
+                                 )
+        self.layers.append(TransformerEncoderLayer(hidden_size, intermediate_size, output_size
+                                 ,num_heads, dropout_prob))
         
     def forward(self, x):
         '''
