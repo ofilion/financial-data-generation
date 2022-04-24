@@ -13,14 +13,14 @@ from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
 from timegan import RealDataset, StockData
 
-INPUT_DIM = 6#len(RealDataset.FEATURES)
+INPUT_DIM = len(RealDataset.FEATURES)
 HIDDEN_DIM = 24
 NOISE_DIM = 32
 BATCH_SIZE = 128
 SEQUENCE_LENGTH = 30
-TRAIN_STEPS = 100
-G_LR = 5e-4
-D_LR = 5e-4
+TRAIN_STEPS = 0
+G_LR = 5e-6
+D_LR = 5e-6
 GAMMA = 1
 
 FOLDER = "gru2-stock"
@@ -214,8 +214,8 @@ if __name__ == "__main__":
     generator = Generator(generator_aux, supervisor, recovery)
     discriminator_model = DiscriminatorModel(embedder, discriminator)
 
-    # train_ds = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 3, 1), dt.datetime(2019, 12, 31), timesteps=SEQUENCE_LENGTH)
-    train_ds = StockData(os.path.join("data", "stock_data.csv"), timesteps=SEQUENCE_LENGTH)
+    train_ds = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 3, 1), dt.datetime(2019, 12, 31), timesteps=SEQUENCE_LENGTH)
+    # train_ds = StockData(os.path.join("data", "stock_data.csv"), timesteps=SEQUENCE_LENGTH)
 
     generator_aux.train()
     supervisor.train()

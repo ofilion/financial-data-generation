@@ -10,7 +10,7 @@ import pandas as pd
 n_components = 2
 seq_len = 30
 sample_size = 100
-file_path = 'gru2'
+file_path = 'gru2-stock'
 
 
 if __name__ == "__main__":
