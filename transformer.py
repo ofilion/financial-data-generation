@@ -8,7 +8,6 @@ import numpy as np
 def do_attention(query,key,value, mask= None):
     # get scaled attention scores
     attention_scores = torch.bmm(query, key.transpose(1,2))/math.sqrt(query.size(-1))
-    
     if mask is not None:
         attention_scores = attention_scores.masked_fill(mask==0, float(1e-10))
     
@@ -179,7 +178,7 @@ class TransformerDecoderLayer(Module):
         x = self.ff(x)
         x = self.norm3(x + hidden)
         x = self.dropout3(x)
-        return x
+        return torch.sigmoid(x)
         
             
 class Embedding(Module):
