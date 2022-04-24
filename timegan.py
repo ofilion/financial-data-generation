@@ -13,7 +13,7 @@ import pandas as pd
 # import matplotlib.pyplot as plt
 import numpy as np
 
-EPOCHS = 100
+EPOCHS = 10
 BATCH_SIZE = 512
 G_LR = 1e-3
 D_LR = 5e-4
@@ -186,10 +186,13 @@ def train_joint_generator_supervisor_step(X: torch.Tensor, Z: torch.Tensor, mode
     
     real_std, real_mean = torch.std_mean(X.view(-1, X.shape[-1]), dim=0)
     pred_std, pred_mean = torch.std_mean(x_hat.view(-1, x_hat.shape[-1]), dim=0)
+    real_third_moment = torch.mean(X.view(-1, X.shape[-1]) - torch.mean(X.view(-1, X.shape[-1]), dim=0, keepdim=True) ** 3, dim=0)
+    pred_third_moment = torch.mean(x_hat.view(-1, X.shape[-1]) - torch.mean(x_hat.view(-1, X.shape[-1]), dim=0, keepdim=True) ** 3, dim=0)
 
     mean_loss = torch.mean(torch.abs(real_mean - pred_mean))
     std_loss = torch.mean(torch.abs(real_std - pred_std))
-    moments_loss = mean_loss + std_loss
+    third_moment_loss = torch.mean(torch.abs(real_third_moment - pred_third_moment))
+    moments_loss = mean_loss + std_loss + third_moment_loss
 
     total_loss = disc_loss + 100 * torch.sqrt(supervisor_loss) + 100 * moments_loss
     total_loss.backward()
