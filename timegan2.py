@@ -204,11 +204,21 @@ def sample(n_samples, generator: Generator):
     return torch.vstack(data)
 
 if __name__ == "__main__":
-    generator_aux = BasicGRU(NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM).to(DEVICE)
-    supervisor = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM, num_layers=2).to(DEVICE)
-    discriminator = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, output_dim=1).to(DEVICE)
-    recovery = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM).to(DEVICE)
-    embedder = BasicGRU(INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM).to(DEVICE)
+    
+    '''
+    generator_aux = BasicGRU(NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM)
+    supervisor = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM, num_layers=2)
+    discriminator = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, output_dim=1)
+    recovery = BasicGRU(HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM)
+    embedder = BasicGRU(INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM)
+    '''
+    
+    #num_hidden, hidden_size, intermediate_size,output_size, num_heads, seq_len,  dropout_prob=0.3
+    generator_aux = TransformerEncoder(3,NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM, 3,SEQUENCE_LENGTH)
+    supervisor = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH)
+    recovery = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM ,3,SEQUENCE_LENGTH)
+    embedder = TransformerEncoder(3,INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH)
+    discriminator = TransformerForBinaryClassification(TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH))
 
     autoencoder = Autoencoder(embedder, recovery)
     adversarial_supervised = Adversarial(generator_aux, discriminator, supervisor=supervisor)
@@ -217,25 +227,29 @@ if __name__ == "__main__":
     discriminator_model = DiscriminatorModel(embedder, discriminator)
 
     train_ds = RealDataset(os.path.join("data", "features.csv"), dt.datetime(1995, 3, 1), dt.datetime(2019, 12, 31), timesteps=SEQUENCE_LENGTH)
-    # train_ds = StockData(os.path.join("data", "stock_data.csv"), timesteps=SEQUENCE_LENGTH)
+   # train_ds = StockData(os.path.join("data", "stock_data.csv"), timesteps=SEQUENCE_LENGTH)
 
     generator_aux.train()
     supervisor.train()
     discriminator.train()
     recovery.train()
     embedder.train()
-
+    
+    losses = np.zeros((TRAIN_STEPS,7))
+    
     ## Embedding network training
     autoencoder_opt = Adam(chain(embedder.parameters(), recovery.parameters()), lr=G_LR)
-    for _ in tqdm(range(TRAIN_STEPS), desc="Embedding network training"):
-        X_ = next(get_batch_data(train_ds)).to(DEVICE)
+    for i in tqdm(range(TRAIN_STEPS), desc="Embedding network training"):
+        X_ = next(get_batch_data(train_ds))
         step_e_loss_t0 = train_autoencoder(X_, autoencoder_opt, autoencoder)
+        losses[i,0] = step_e_loss_t0
 
     ## Supervised network training
     supervisor_opt = Adam(chain(supervisor.parameters(), generator.parameters()), lr=G_LR)
-    for _ in tqdm(range(TRAIN_STEPS), desc="Supervised network training"):
-        X_ = next(get_batch_data(train_ds)).to(DEVICE)
+    for i in tqdm(range(TRAIN_STEPS), desc="Supervised network training"):
+        X_ = next(get_batch_data(train_ds))
         step_g_loss_s = train_supervisor(X_, supervisor_opt, embedder, supervisor)
+        losses[i,1] = step_g_loss_s
 
     ## Joint training
     generator_opt = Adam(chain(generator_aux.parameters(), supervisor.parameters()), lr=G_LR)
@@ -243,20 +257,26 @@ if __name__ == "__main__":
     discriminator_opt = Adam(discriminator.parameters(), lr=D_LR)
 
     step_g_loss_u = step_g_loss_s = step_g_loss_v = step_e_loss_t0 = step_d_loss = 0
-    for _ in tqdm(range(TRAIN_STEPS), desc="Joint networks training"):
+    for i in tqdm(range(TRAIN_STEPS), desc="Joint networks training"):
         for _ in range(2):
-            X_ = next(get_batch_data(train_ds)).to(DEVICE)
-            Z_ = get_batch_noise().to(DEVICE)
+            X_ = next(get_batch_data(train_ds))
+            Z_ = get_batch_noise()
 
             step_g_loss_u, step_g_loss_S, step_g_loss_v = train_generator(X_,Z_, generator_opt, adversarial_supervised, adversarial_embedded, embedder, supervisor, generator)
             step_e_loss_t0 = train_embedder(X_, embedder_opt, embedder, supervisor, autoencoder)
-
-        X_ = next(get_batch_data(train_ds)).to(DEVICE)
-        Z_ = get_batch_noise().to(DEVICE)
+        losses[i,2] = step_g_loss_u
+        losses[i,3] = step_g_loss_S
+        losses[i,4] = step_g_loss_v
+        losses[i,5] = step_e_loss_t0 
+        X_ = next(get_batch_data(train_ds))
+        Z_ = get_batch_noise()
         step_d_loss = discriminator_loss(X_, Z_, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
         if step_d_loss > 0.15:
             step_d_loss = train_discriminator(X_, Z_, discriminator_opt, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
-
+        losses[i,6] = step_d_loss
+        
+        
+            
     if not os.path.exists(FOLDER):
         os.mkdir(FOLDER)
     torch.save(embedder.cpu().state_dict(), FOLDER + '/embedder.pt')
@@ -264,3 +284,12 @@ if __name__ == "__main__":
     torch.save(supervisor.cpu().state_dict(), FOLDER +'/supervisor.pt')
     torch.save(generator_aux.cpu().state_dict(), FOLDER + '/generator_aux.pt')
     torch.save(discriminator.cpu().state_dict(), FOLDER + '/discriminator.pt')
+    
+    
+    
+    #synthetic_sample = sample(SAMPLE_SIZE, generator).numpy()
+    
+    
+    with open('losses.pkl','wb') as f:
+        pkl.dump(losses, f)
+
