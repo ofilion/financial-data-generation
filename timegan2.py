@@ -12,13 +12,16 @@ import torch.nn.functional as F
 from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
 from timegan import RealDataset, StockData
+from transformer import *
+
+import pickle as pkl
 
 INPUT_DIM = len(RealDataset.FEATURES)
 HIDDEN_DIM = 24
 NOISE_DIM = 32
 BATCH_SIZE = 128
 SEQUENCE_LENGTH = 30
-TRAIN_STEPS = 10000
+TRAIN_STEPS = 1000
 G_LR = 5e-6
 D_LR = 5e-6
 GAMMA = 1
@@ -26,7 +29,6 @@ GAMMA = 1
 FOLDER = "gru2-stock"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class BasicGRU(Module):
 
@@ -214,11 +216,11 @@ if __name__ == "__main__":
     '''
     
     #num_hidden, hidden_size, intermediate_size,output_size, num_heads, seq_len,  dropout_prob=0.3
-    generator_aux = TransformerEncoder(3,NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM, 3,SEQUENCE_LENGTH)
-    supervisor = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH)
-    recovery = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM ,3,SEQUENCE_LENGTH)
-    embedder = TransformerEncoder(3,INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH)
-    discriminator = TransformerForBinaryClassification(TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH))
+    generator_aux = TransformerEncoder(3,NOISE_DIM, HIDDEN_DIM, HIDDEN_DIM, 3,SEQUENCE_LENGTH).to(DEVICE)
+    supervisor = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH).to(DEVICE)
+    recovery = TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, INPUT_DIM ,3,SEQUENCE_LENGTH).to(DEVICE)
+    embedder = TransformerEncoder(3,INPUT_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH).to(DEVICE)
+    discriminator = TransformerForBinaryClassification(TransformerEncoder(3,HIDDEN_DIM, HIDDEN_DIM, HIDDEN_DIM ,3,SEQUENCE_LENGTH)).to(DEVICE)
 
     autoencoder = Autoencoder(embedder, recovery)
     adversarial_supervised = Adversarial(generator_aux, discriminator, supervisor=supervisor)
@@ -240,14 +242,14 @@ if __name__ == "__main__":
     ## Embedding network training
     autoencoder_opt = Adam(chain(embedder.parameters(), recovery.parameters()), lr=G_LR)
     for i in tqdm(range(TRAIN_STEPS), desc="Embedding network training"):
-        X_ = next(get_batch_data(train_ds))
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
         step_e_loss_t0 = train_autoencoder(X_, autoencoder_opt, autoencoder)
         losses[i,0] = step_e_loss_t0
 
     ## Supervised network training
     supervisor_opt = Adam(chain(supervisor.parameters(), generator.parameters()), lr=G_LR)
     for i in tqdm(range(TRAIN_STEPS), desc="Supervised network training"):
-        X_ = next(get_batch_data(train_ds))
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
         step_g_loss_s = train_supervisor(X_, supervisor_opt, embedder, supervisor)
         losses[i,1] = step_g_loss_s
 
@@ -259,8 +261,8 @@ if __name__ == "__main__":
     step_g_loss_u = step_g_loss_s = step_g_loss_v = step_e_loss_t0 = step_d_loss = 0
     for i in tqdm(range(TRAIN_STEPS), desc="Joint networks training"):
         for _ in range(2):
-            X_ = next(get_batch_data(train_ds))
-            Z_ = get_batch_noise()
+            X_ = next(get_batch_data(train_ds)).to(DEVICE)
+            Z_ = get_batch_noise().to(DEVICE)
 
             step_g_loss_u, step_g_loss_S, step_g_loss_v = train_generator(X_,Z_, generator_opt, adversarial_supervised, adversarial_embedded, embedder, supervisor, generator)
             step_e_loss_t0 = train_embedder(X_, embedder_opt, embedder, supervisor, autoencoder)
@@ -268,8 +270,8 @@ if __name__ == "__main__":
         losses[i,3] = step_g_loss_S
         losses[i,4] = step_g_loss_v
         losses[i,5] = step_e_loss_t0 
-        X_ = next(get_batch_data(train_ds))
-        Z_ = get_batch_noise()
+        X_ = next(get_batch_data(train_ds)).to(DEVICE)
+        Z_ = get_batch_noise().to(DEVICE)
         step_d_loss = discriminator_loss(X_, Z_, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
         if step_d_loss > 0.15:
             step_d_loss = train_discriminator(X_, Z_, discriminator_opt, discriminator_model, adversarial_supervised, adversarial_embedded, GAMMA)
