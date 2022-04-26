@@ -93,8 +93,8 @@ if __name__ == "__main__":
     all_generated = np.reshape(all_generated ,(-1,7))
     all_generated_gru = np.reshape(all_generated_gru, (-1, 7))
 
-    scale_max = X.max.to_numpy()[None, :]
-    scale_min = X.min.to_numpy()[None, :]
+    scale_max = X.max.values[None, :]
+    scale_min = X.min.values[None, :]
 
     real_data = real_data * (scale_max - scale_min) + scale_min
     all_generated =  all_generated * (scale_max - scale_min) + scale_min
