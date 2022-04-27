@@ -54,8 +54,8 @@ if __name__ == "__main__":
     pca_gru = pd.DataFrame(pca.transform(np.reshape(all_generated_gru, (all_generated_gru.shape[0], -1)))).sample(200)
     pca_basic = pd.DataFrame(pca.transform(np.reshape(all_generated_basic, (all_generated_basic.shape[0], -1)))).sample(200)
 
-    fig = plt.figure(constrained_layout=True, figsize=(20, 10))
-    spec = gridspec.GridSpec(ncols=2, nrows=1, figure=fig)
+    fig = plt.figure(constrained_layout=True, figsize=(10, 10))
+    spec = gridspec.GridSpec(ncols=1, nrows=1, figure=fig)
     
     ax = fig.add_subplot(spec[0,0])
     #ax.set_title('PCA results', fontsize=20, pad=10)
@@ -79,8 +79,8 @@ if __name__ == "__main__":
     tsne = TSNE(n_components=2, n_iter=300)
     tsne_results = pd.DataFrame(tsne.fit_transform(data))
 
-    fig = plt.figure(constrained_layout=True, figsize=(20, 10))
-    spec = gridspec.GridSpec(ncols=2, nrows=1, figure=fig)
+    fig = plt.figure(constrained_layout=True, figsize=(10, 10))
+    spec = gridspec.GridSpec(ncols=1, nrows=1, figure=fig)
 
     ax2 = fig.add_subplot(spec[0,0])
     #ax2.set_title('TSNE results', fontsize=20, pad=10)
