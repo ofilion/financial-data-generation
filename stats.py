@@ -10,8 +10,6 @@ import pandas as pd
 
 if __name__ == "__main__":
     
-    np.random.seed(708)
-    
     generated = []
     for i in range(5):
         file_path = 'transformer'+str(i+1)+'/generated.pkl'
@@ -38,22 +36,32 @@ if __name__ == "__main__":
 
     print()
 
+    scale_max = X.max.values[None, None, :]
+    scale_min = X.min.values[None, None, :]
+    data_mean = X.df[RealDataset.FEATURES].mean().values[None, None, :]
+    data_std = X.df[RealDataset.FEATURES].std(ddof=1).values[None, None, :]
+
+    real_data = real_data * (scale_max - scale_min) + scale_min
+    all_generated =  all_generated * (scale_max - scale_min) + scale_min
+    all_generated_gru =  all_generated_gru * (scale_max - scale_min) + scale_min
+    all_generated_basic = all_generated_basic * data_std + data_mean
+
     ### PCA ###
     pca = PCA(n_components=2)
     
     pca_real = pd.DataFrame(pca.fit_transform(np.reshape(real_data, (real_data.shape[0], -1)))).sample(200)
     pca_trans = pd.DataFrame(pca.transform(np.reshape(all_generated, (all_generated.shape[0], -1)))).sample(200)
     pca_gru = pd.DataFrame(pca.transform(np.reshape(all_generated_gru, (all_generated_gru.shape[0], -1)))).sample(200)
-    #pca_basic = pd.DataFrame(pca.transform(np.reshape(all_generated_basic, (all_generated_basic.shape[0], -1)))).sample(200)
+    pca_basic = pd.DataFrame(pca.transform(np.reshape(all_generated_basic, (all_generated_basic.shape[0], -1)))).sample(200)
 
     fig = plt.figure(constrained_layout=True, figsize=(20, 10))
     spec = gridspec.GridSpec(ncols=2, nrows=1, figure=fig)
     
     ax = fig.add_subplot(spec[0,0])
-    ax.set_title('PCA results', fontsize=20, pad=10)
+    #ax.set_title('PCA results', fontsize=20, pad=10)
 
     plt.scatter(pca_real.iloc[:, 0].values, pca_real.iloc[:, 1].values, c='black', alpha=0.2, label='Original')
-   # plt.scatter(pca_basic.iloc[:, 0].values, pca_basic.iloc[:, 1].values, c='blue', alpha=0.2, label='Basic TimeGAN')
+    plt.scatter(pca_basic.iloc[:, 0].values, pca_basic.iloc[:, 1].values, c='blue', alpha=0.2, label='Basic TimeGAN')
     plt.scatter(pca_gru.iloc[:, 0].values, pca_gru.iloc[:, 1].values, c='red', alpha=0.2, label='GRU TimeGAN')
     plt.scatter(pca_trans.iloc[:, 0].values, pca_trans.iloc[:, 1].values, c='green', alpha=0.2, label='Transformer TimeGAN')
 
@@ -75,7 +83,7 @@ if __name__ == "__main__":
     spec = gridspec.GridSpec(ncols=2, nrows=1, figure=fig)
 
     ax2 = fig.add_subplot(spec[0,0])
-    ax2.set_title('TSNE results', fontsize=20, pad=10)
+    #ax2.set_title('TSNE results', fontsize=20, pad=10)
 
     plt.scatter(tsne_results.iloc[:200, 0].values, tsne_results.iloc[:200, 1].values, c='black', alpha=0.2, label='Original')
     plt.scatter(tsne_results.iloc[200:400, 0].values, tsne_results.iloc[200:400, 1].values, c='blue', alpha=0.2, label='Basic GAN')
@@ -86,19 +94,36 @@ if __name__ == "__main__":
     plt.savefig("tsne.png")
     plt.cla()
 
+    ### Visualize an example ###
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(15, 10))
+    axes=axes.flatten()
+   
+    cols = [
+    "Return","Open-Close",'Open-Low',"Open-High","Normalized Volume", "VIX", "VIX Open-close"
+    ]
+  
+   
+    time = list(range(1,30))
+    idx = 2
+    for j, col in enumerate(cols):
+    
+        frame = pd.DataFrame({'Real': real_data[idx,:, j],
+                              #'Basic': all_generated_basic[idx,:,j],
+                              'GRU':  all_generated_gru[idx,:,j],
+                              'Transformer': all_generated[idx,:,j],
+                              })
+        frame.plot(ax=axes[j],
+                   title = col,
+                   secondary_y='Synthetic data', style=['-', '--', '--'])
+    fig.tight_layout()
+    plt.show()
+
     #####
     
     real_data = np.reshape(real_data ,(-1,7))
     all_generated_basic = np.reshape(all_generated_basic, (-1, 7))
     all_generated = np.reshape(all_generated ,(-1,7))
     all_generated_gru = np.reshape(all_generated_gru, (-1, 7))
-
-    scale_max = X.max.values[None, :]
-    scale_min = X.min.values[None, :]
-
-    real_data = real_data * (scale_max - scale_min) + scale_min
-    all_generated =  all_generated * (scale_max - scale_min) + scale_min
-    all_generated_gru =  all_generated_gru * (scale_max - scale_min) + scale_min
 
     ##### calc means ######
     avg_real = np.mean(real_data,0)
