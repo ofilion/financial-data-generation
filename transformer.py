@@ -229,6 +229,8 @@ class TransformerEncoder(Module):
         # concatenate it to input
         '''
         positional = get_positional_encoding(self.seq_len, self.dim)
+        if x.is_cuda:
+            positional = positional.cuda()
         x = self.embed(x) + positional
         for layer in self.layers:
             #print(x.shape)
