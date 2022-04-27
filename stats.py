@@ -2,7 +2,7 @@ import pickle as pkl
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from timegan2 import *
+from timegan import *
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import seaborn as sns

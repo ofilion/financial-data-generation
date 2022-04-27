@@ -2,7 +2,7 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 import numpy as np
 # from timegan import *
-from timegan2 import *
+from timegan import *
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import pandas as pd
