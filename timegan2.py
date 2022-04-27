@@ -11,10 +11,34 @@ from torch.nn import Module, Linear, GRU
 import torch.nn.functional as F
 from torch.optim import Optimizer, Adam
 from torch.utils.data import Dataset, DataLoader
-from timegan import RealDataset, StockData
 from transformer import *
 
 import pickle as pkl
+
+class RealDataset(Dataset):
+
+    FEATURES = ["Return", "Open-Close", "Open-Low", "Open-High", "Normalized Volume", "VIX", "VIX Open-Close"]
+
+    def __init__(self, filepath: str, start_date, end_date, timesteps=30) -> None:
+        super(RealDataset, self).__init__()
+        self.df = pd.read_csv(filepath, parse_dates=True, index_col="Date").loc[start_date:end_date]
+        self.timesteps = timesteps
+
+        self.df = self.df[RealDataset.FEATURES]
+        self.max = self.df.max()
+        self.min = self.df.min()
+        self.norm_df = (self.df - self.min) / (self.max - self.min)
+        # self.mean = self.df.mean()
+        # self.std = self.df.std(ddof=1)
+        # self.norm_df = (self.df - self.mean) / self.std
+        # self.data = torch.Tensor(self.norm_df.values.astype(np.float32)).to(DEVICE)
+
+    def __len__(self):
+        return len(self.df) - self.timesteps
+
+    def __getitem__(self, index) -> torch.Tensor:
+       return torch.from_numpy(self.norm_df.iloc[index:index+self.timesteps].values).float()
+    #    return self.data[index:index+self.timesteps]
 
 INPUT_DIM = len(RealDataset.FEATURES)
 HIDDEN_DIM = 24
