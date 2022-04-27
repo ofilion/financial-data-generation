@@ -63,7 +63,6 @@ class MultiHeadAttention(Module):
         x = torch.cat([head(h) for head in self.heads], dim = -1)
         return self.output(x) 
 
-
 class Sine(Module):
     
     def __init__(self,input_size) -> None:
@@ -85,8 +84,7 @@ class Sine(Module):
         time_periodic = torch.unsqueeze(time_periodic,-1)
         
         return torch.cat([time_linear, time_periodic], -1)
-    
-    
+      
 class Time2Vec(Module):
     
     def __init__(self, seq_len) -> None:
@@ -96,8 +94,7 @@ class Time2Vec(Module):
     def forward(self, x):
         x = torch.mean(x, axis=-1)
         x = self.periodic(x)
-        return x
-    
+        return x 
     
 class FeedForward(Module):
     
@@ -117,9 +114,7 @@ class FeedForward(Module):
         x = self.conv1(x)
         x = self.gelu(x)
         x = self.conv2(x)
-        return self.dropout(x)
-   
-    
+        return self.dropout(x)    
     
 class TransformerEncoderLayer(Module):
     
@@ -143,45 +138,6 @@ class TransformerEncoderLayer(Module):
         # skip connection
         return self.out(x)
     
-    
-class TransformerDecoderLayer(Module):
-    
-    def __init__(self,hidden_size, intermediate_size, output_size ,num_heads, dropout_prob=0.3) -> None:
-        super().__init__()
-        self.layer_norm1 = LayerNorm(hidden_size)
-        self.layer_norm2 = LayerNorm(hidden_size)
-        self.layer_norm3 = LayerNorm(hidden_size)
-        
-        self.dropout1 = Dropout(dropout_prob)
-        self.dropout2 = Dropout(dropout_prob)
-        self.dropout3 = Dropout(dropout_prob)
-        
-        self.attention_self = MultiHeadAttention(hidden_size, num_heads)
-        self.attention_dec = MultiHeadAttention(hidden_size, num_heads)
-        
-        self.ff = FeedForward(hidden_size ,intermediate_size, dropout_prob)
-        
-    def forward(self, dec, enc, src_mask, tgt_mask):
-        
-        
-        #layer norm with skip connection
-        x = self.attention_self(dec, tgt_mask)
-        x = self.norm1(x + dec)
-        x = self.dropout1(x)
-        
-        if enc is not None:
-            hidden = x
-            x = self.attention_dec(x, src_mask)
-            x = self.norm2(x + hidden)
-            x = self.dropout2(x)
-        
-        hidden = x
-        x = self.ff(x)
-        x = self.norm3(x + hidden)
-        x = self.dropout3(x)
-        return torch.sigmoid(x)
-        
-            
 class Embedding(Module):
     
     def __init__(self, dim, dropout_prob= 0.3) -> None:
@@ -236,28 +192,6 @@ class TransformerEncoder(Module):
             #print(x.shape)
             x = layer(x)
         return x
-    
-
-class TransformerForPrediction(Module):
-    
-    def __init__(self, encoder: TransformerEncoder, dropout_prob = 0.3) -> None:
-        super(TransformerForPrediction, self).__init__()
-        self.encoder = encoder
-        self.dropout = Dropout(dropout_prob)
-        self.lin1 = Linear(encoder.hidden_dim, encoder.hidden_dim)
-        self.out = Linear(encoder.hidden_dim, 1)
-
-        
-    def forward(self, x):
-        
-        x = self.encoder(x)
-        x = self.dropout(x)
-        x = torch.mean(x, dim=1) 
-
-        x = self.lin1(x)
-        x = torch.relu(x)
-        return self.out(x)
-
         
 class TransformerForBinaryClassification(Module):
     
